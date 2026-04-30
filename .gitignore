@@ -1,0 +1,11 @@
+# Ignore the entire build directory
+build/
+
+# Ignore compiled binaries if they end up in the root
+drutadb
+smriti
+a.out
+
+# Ignore IDE specific files
+.vscode/
+.idea/
