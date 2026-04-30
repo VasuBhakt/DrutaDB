@@ -14,8 +14,8 @@ find_package(Threads REQUIRED)
 # Explicitly listing files fixes the "No SOURCES" error
 # and makes the build process more robust 
 add_executable(drutadb 
-    main.cpp 
-    parser_resp.hpp
+    src/main.cpp 
+    src/parser_resp.hpp
 )
 
 # Linking pthreads for Linux/WSL networking

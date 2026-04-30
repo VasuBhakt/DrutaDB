@@ -54,9 +54,10 @@ struct RespParser {
     void parse_and_execute(const char* buffer, int length, int fd) {
         for(int i=0;i<length;i++) {
             char c = buffer[i];
-
+            // --- DEBUG LINE HERE ---
+            // Using printf to see the state transition and the current character (as int for visibility)
+            printf("State: %d | Char: '%c' (ASCII: %d)\n", (int)state, (c > 32 ? c : '.'), (int)c);
             switch(state) {
-
                 case ParserState::IDLE:
                     if(c=='*') {
                         state = ParserState::READING_ARRAY_SIZE;
@@ -78,11 +79,18 @@ struct RespParser {
                     if(c=='$') {
                         current_buffer.clear();
                     } else if(c=='\n') {
-                        current_bulk_len = std::stoi(current_buffer);
-                        current_buffer.clear();
-                        data_accumulator.clear();
-                        state = ParserState::READING_DATA;
-                    } else if(c!='\r') {
+                        if (!current_buffer.empty()) {
+                            try {
+                                current_bulk_len = std::stoi(current_buffer);
+                                current_buffer.clear();
+                                data_accumulator.clear();
+                                state = ParserState::READING_DATA;
+                            } catch (...) {
+                                this->reset(); 
+                            }
+                        }
+                        
+                    } else if(isdigit(c)) {
                         current_buffer += c;
                     }
                     break;
@@ -99,6 +107,7 @@ struct RespParser {
                                 handle_command(fd,args);
                                 this->reset(); // let the loop finish the buffer
                             } else {
+                                current_buffer.clear();
                                 state = ParserState::READING_BULK_SIZE;
                             }
                         }
