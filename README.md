@@ -1,6 +1,6 @@
 # ⚡ DrutaDB
 
-A high-performance, single-threaded, in-memory key-value data store written in C++23. DrutaDB implements an event-driven networking architecture using POSIX sockets and I/O multiplexing, making it a fast, lightweight, and Redis-like database.
+An event-driven, single-threaded, in-memory key-value data store written in C++23. DrutaDB implements an event-driven networking architecture using POSIX sockets and I/O multiplexing, making it a fast, lightweight, and Redis-like database.
 
 ## 🏗️ Architecture & Technical Details
 
