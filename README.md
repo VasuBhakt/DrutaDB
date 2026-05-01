@@ -65,3 +65,26 @@ OK
 127.0.0.1:6379> RPUSH mylist "item1" "item2"
 (integer) 2
 ```
+--- 
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+This project was built as a deep dive into **low-level systems engineering, specifically focusing on POSIX socket programming, TCP/IP networking, and I/O multiplexing.** A special thanks to the [CodeCrafters](https://codecrafters.io/) "Build Your Own Redis" challenge, which served as an excellent structural guide and testing environment during the initial development and learning phase of this database.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Open issues or submit pull requests to improve the project! <br>
+
+---
+
+## 🤓 Fun Fact
+
+The inspiration for the name of this project comes from the Sanskrit word **_druta_**, which means Fast or Quick.
