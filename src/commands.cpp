@@ -1,9 +1,9 @@
 #include "commands.hpp"
 #include "store.hpp"
-#include <sys/socket.h>
+#include <algorithm>
 #include <chrono>
 #include <string>
-#include <algorithm>
+#include <sys/socket.h>
 
 long long get_current_time_ms() {
   auto now = std::chrono::system_clock::now();
@@ -27,38 +27,48 @@ void handle_command(int fd, std::vector<std::string> &args) {
     std::string res =
         "$" + std::to_string(args[1].length()) + "\r\n" + args[1] + "\r\n";
     send(fd, res.c_str(), res.length(), 0);
-  } else if (cmd == "SET") {
+  } else if (cmd == "SET" && args.size() >= 3) {
     std::string key = args[1];
     std::string val = args[2];
     long long expire_at = 0;
-    for (size_t i = 3; i < args.size(); i++) {
-      std::string opt = args[i];
-      for (char &c : opt)
-        c = toupper((unsigned char)c);
-      if (opt == "EX" && i + 1 < args.size()) {
-        long long seconds = std::stoll(args[i + 1]);
-        expire_at = get_current_time_ms() + (seconds * 1000);
-        i++;
-      } else if (opt == "PX" && i + 1 < args.size()) {
-        long long ms = std::stoll(args[i + 1]);
-        expire_at = get_current_time_ms() + ms;
-        i++;
+    try {
+      for (size_t i = 3; i < args.size(); i++) {
+        std::string opt = args[i];
+        for (char &c : opt)
+          c = toupper((unsigned char)c);
+        if (opt == "EX" && i + 1 < args.size()) {
+          long long seconds = std::stoll(args[i + 1]);
+          expire_at = get_current_time_ms() + (seconds * 1000);
+          i++;
+        } else if (opt == "PX" && i + 1 < args.size()) {
+          long long ms = std::stoll(args[i + 1]);
+          expire_at = get_current_time_ms() + ms;
+          i++;
+        }
       }
+      kv_store[key] = RedisValue(ValueType::STRING, val, {}, expire_at);
+      send(fd, "+OK\r\n", 5, 0);
+    } catch (...) {
+      std::string err = "-ERR value is not an integer or out of range\r\n";
+      send(fd, err.c_str(), err.size(), 0);
     }
-    kv_store[key] = RedisValue(ValueType::STRING, val, {}, expire_at);
-    send(fd, "+OK\r\n", 5, 0);
-  } else if (cmd == "GET") {
+  } else if (cmd == "GET" && args.size() >= 2) {
     auto it = kv_store.find(args[1]);
     if (it != kv_store.end()) {
-      long long now = get_current_time_ms();
-      if (it->second.expiry_time != 0 && now > it->second.expiry_time) {
-        kv_store.erase(it);
-        send(fd, "$-1\r\n", 5, 0);
+      if (it->second.type != ValueType::STRING) {
+        std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+        send(fd, err.c_str(), err.size(), 0);
       } else {
-        std::string val = it->second.data;
-        std::string res =
-            "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
-        send(fd, res.c_str(), res.length(), 0);
+        long long now = get_current_time_ms();
+        if (it->second.expiry_time != 0 && now > it->second.expiry_time) {
+          kv_store.erase(it);
+          send(fd, "$-1\r\n", 5, 0);
+        } else {
+          std::string val = it->second.data;
+          std::string res =
+              "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
+          send(fd, res.c_str(), res.length(), 0);
+        }
       }
     } else {
       send(fd, "$-1\r\n", 5, 0);
@@ -68,7 +78,8 @@ void handle_command(int fd, std::vector<std::string> &args) {
     auto it = kv_store.find(key);
     if (it != kv_store.end()) {
       if (it->second.type != ValueType::LIST) {
-        std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+        std::string err = "-WRONGTYPE Operation against a key holding the "
+                          "wrong kind of value\r\n";
         send(fd, err.c_str(), err.size(), 0);
       } else {
         for (size_t i = 2; i < args.size(); i++) {
@@ -90,7 +101,8 @@ void handle_command(int fd, std::vector<std::string> &args) {
     auto it = kv_store.find(list_key);
     if (it != kv_store.end()) {
       if (it->second.type != ValueType::LIST) {
-        std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+        std::string err = "-WRONGTYPE Operation against a key holding the "
+                          "wrong kind of value\r\n";
         send(fd, err.c_str(), err.size(), 0);
       } else {
         try {
@@ -129,8 +141,7 @@ void handle_command(int fd, std::vector<std::string> &args) {
             send(fd, "*0\r\n", 4, 0);
           }
         } catch (...) {
-          std::string res =
-              "-WRONGTYPE Non-numeric values given for range\r\n";
+          std::string res = "-WRONGTYPE Non-numeric values given for range\r\n";
           send(fd, res.c_str(), res.size(), 0);
         }
       }
@@ -140,7 +151,9 @@ void handle_command(int fd, std::vector<std::string> &args) {
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {
-    std::string res = "-ERR unknown command or incorrect number of arguments for '" + cmd + "'\r\n";
+    std::string res =
+        "-ERR unknown command or incorrect number of arguments for '" + cmd +
+        "'\r\n";
     send(fd, res.c_str(), res.length(), 0);
   }
 }
