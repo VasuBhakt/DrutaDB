@@ -1,8 +1,8 @@
-# DrutaDB
+# ⚡ DrutaDB
 
 A high-performance, single-threaded, in-memory key-value data store written in C++23. DrutaDB implements an event-driven networking architecture using POSIX sockets and I/O multiplexing, making it a fast, lightweight, and Redis-like database.
 
-## Architecture & Technical Details
+## 🏗️ Architecture & Technical Details
 
 - **Event-Driven Concurrency:** Utilizes the POSIX `poll()` API for I/O multiplexing. This allows the server to handle multiple concurrent TCP client connections efficiently on a single thread without the context-switching overhead of a thread-per-connection model.
 
@@ -14,7 +14,7 @@ A high-performance, single-threaded, in-memory key-value data store written in C
 
 - **Lazy Eviction:** Supports key Time-to-Live (TTL). Expired keys are lazily evaluated and evicted upon read attempts (`GET`).
 
-## Supported Commands
+## 🛠️ Supported Commands
 
 DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 
@@ -24,7 +24,7 @@ DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 - `GET`
 - `RPUSH`
 
-## Supported Environments
+## 🌍 Supported Environments
 
 Due to its reliance on standard POSIX APIs (`poll`, `socket`, `arpa/inet.h`), DrutaDB is highly portable and natively supported in the following environments:
 
@@ -34,7 +34,7 @@ Due to its reliance on standard POSIX APIs (`poll`, `socket`, `arpa/inet.h`), Dr
 
 _(Note: While `poll()` provides excellent portability across Unix-like systems, scaling to extreme concurrent loads (e.g., C10K) would require swapping the multiplexer to OS-specific APIs like Linux's `epoll` or macOS's `kqueue`.)_
 
-## Build & Run
+## 🚀 Build & Run
 
 **Requirements:**
 
@@ -50,7 +50,7 @@ make
 ./drutadb
 ```
 
-## Usage Example
+## 💻 Usage Example
 
 You can interact with DrutaDB using the standard `redis-cli`:
 
