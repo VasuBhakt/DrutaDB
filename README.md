@@ -19,10 +19,11 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 
 - `PING`
-- `ECHO`
-- `SET` (Supports `EX` for seconds and `PX` for milliseconds TTL)
-- `GET`
-- `RPUSH`
+- `ECHO <message>`
+- `SET <key> <val> EX <ttl in seconds>` (Supports `EX` for seconds and `PX` for milliseconds TTL)
+- `GET <key>`
+- `RPUSH <list_name> <element1> <element2> ...` (List data structure)
+- `LRANGE <list_name> <start_index> <end_index>` (Get elements within range from list)
 
 ## 🌍 Supported Environments
 
@@ -64,8 +65,24 @@ OK
 "active"
 127.0.0.1:6379> RPUSH mylist "item1" "item2"
 (integer) 2
+127.0.0.1:6379> LRANGE mylist 0 1
+1) "item1"
+2) "item2"
+
 ```
 --- 
+
+## 🧪 Test Scripts
+
+Shell scripts for testing are added in the ```test``` folder.
+Run them from root of folder by following command:
+
+```bash
+chmod +x ./test.sh
+```
+(for initial test, just ```./test.sh``` works for later runs)
+
+---
 
 ## 📜 License
 
