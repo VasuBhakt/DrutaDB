@@ -56,7 +56,7 @@ struct RespParser {
             char c = buffer[i];
             // --- DEBUG LINE HERE ---
             // Using printf to see the state transition and the current character (as int for visibility)
-            printf("State: %d | Char: '%c' (ASCII: %d)\n", (int)state, (c > 32 ? c : '.'), (int)c);
+            //printf("State: %d | Char: '%c' (ASCII: %d)\n", (int)state, (c > 32 ? c : '.'), (int)c);
             switch(state) {
                 case ParserState::IDLE:
                     if(c=='*') {
@@ -181,6 +181,11 @@ struct RespParser {
                 kv_store[key] = data_list;
                 send_integer(fd,kv_store[key].list_data.size());
             }
+        } else if(cmd=="COMMAND") {
+            send(fd, "*0\r\n", 4, 0);
+        } else {
+            std::string res = "-ERR unknown command '" + cmd + "'\r\n";
+            send(fd, res.c_str(), res.length(), 0);
         }
     }
 

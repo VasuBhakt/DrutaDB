@@ -31,3 +31,19 @@ if [[ "$GET_RESPONSE" == *"bar"* ]]; then
 else
     echo "❌ GET Failed (Got: $GET_RESPONSE)"
 fi
+
+echo "Testing COMMAND DOCS..."
+CMD_RESPONSE=$(send_cmd "*2\r\n\$7\r\nCOMMAND\r\n\$4\r\nDOCS\r\n")
+if [[ "$CMD_RESPONSE" == *"*0"* ]]; then
+    echo "✅ COMMAND DOCS Handled Successfully"
+else
+    echo "❌ COMMAND DOCS Failed (Got: $CMD_RESPONSE)"
+fi
+
+echo "Testing Unknown Command..."
+UNKNOWN_RESPONSE=$(send_cmd "*1\r\n\$8\r\nBOGUSCMD\r\n")
+if [[ "$UNKNOWN_RESPONSE" == *"-ERR unknown command"* ]]; then
+    echo "✅ Unknown Command Handled Successfully"
+else
+    echo "❌ Unknown Command Failed (Got: $UNKNOWN_RESPONSE)"
+fi
