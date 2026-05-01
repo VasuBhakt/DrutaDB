@@ -15,7 +15,9 @@ find_package(Threads REQUIRED)
 # and makes the build process more robust 
 add_executable(drutadb 
     src/main.cpp 
-    src/parser_resp.hpp
+    src/store.cpp
+    src/commands.cpp
+    src/parser_resp.cpp
 )
 
 # Linking pthreads for Linux/WSL networking
