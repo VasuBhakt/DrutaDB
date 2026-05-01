@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     // What server_addr does: It tells the OS where that socket should live (IP and Port).
     struct sockaddr_in server_addr;
     server_addr.sin_family = AF_INET;  // IPv4
-    server_addr.sin_addr.s_addr = INADDR_ANY; // Listen on any available network interface
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); // Listen on localhost only
     server_addr.sin_port = htons(6379); // Redis port (6379). htons() ensures "Big Endian" byte order for the network.
 
     // bind() associates the socket with the specific IP and Port.
