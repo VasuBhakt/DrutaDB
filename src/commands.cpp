@@ -17,17 +17,22 @@ void send_integer(int fd, size_t data) {
   send(fd, res.c_str(), res.size(), 0);
 }
 
-void handle_command(int fd, std::vector<std::string> &args) {
-  std::string cmd = args[0];
-  for (char &c : cmd)
-    c = toupper((unsigned char)c);
-  if (cmd == "PING") {
-    send(fd, "+PONG\r\n", 7, 0);
-  } else if (cmd == "ECHO" && args.size() > 1) {
-    std::string res =
-        "$" + std::to_string(args[1].length()) + "\r\n" + args[1] + "\r\n";
-    send(fd, res.c_str(), res.length(), 0);
-  } else if (cmd == "SET" && args.size() >= 3) {
+void command_ping(int fd) {
+  send(fd, "+PONG\r\n", 7, 0);
+}
+
+void command_echo(int fd, std::vector<std::string> &args) {
+  std::string res;
+  res.reserve(args[1].length()+50);
+  res += "$";
+  res += std::to_string(args[1].length());
+  res += "\r\n";
+  res += args[1];
+  res += "\r\n";
+  send(fd, res.c_str(), res.length(), 0);
+}
+
+void command_set(int fd, std::vector<std::string> &args) {
     std::string key = args[1];
     std::string val = args[2];
     long long expire_at = 0;
@@ -52,7 +57,9 @@ void handle_command(int fd, std::vector<std::string> &args) {
       std::string err = "-ERR value is not an integer or out of range\r\n";
       send(fd, err.c_str(), err.size(), 0);
     }
-  } else if (cmd == "GET" && args.size() >= 2) {
+}
+
+void command_get(int fd, std::vector<std::string> &args) {
     auto it = kv_store.find(args[1]);
     if (it != kv_store.end()) {
       if (it->second.type != ValueType::STRING) {
@@ -65,21 +72,27 @@ void handle_command(int fd, std::vector<std::string> &args) {
           send(fd, "$-1\r\n", 5, 0);
         } else {
           std::string val = it->second.data;
-          std::string res =
-              "$" + std::to_string(val.length()) + "\r\n" + val + "\r\n";
+          std::string res;
+          res.reserve(val.length()+50);
+          res += "$";
+          res += std::to_string(val.length());
+          res += "\r\n";
+          res += val;
+          res += "\r\n";
           send(fd, res.c_str(), res.length(), 0);
         }
       }
     } else {
       send(fd, "$-1\r\n", 5, 0);
     }
-  } else if (cmd == "RPUSH" && args.size() >= 3) {
+}
+
+void command_rpush(int fd, std::vector<std::string> &args) {
     std::string key = args[1];
     auto it = kv_store.find(key);
     if (it != kv_store.end()) {
       if (it->second.type != ValueType::LIST) {
-        std::string err = "-WRONGTYPE Operation against a key holding the "
-                          "wrong kind of value\r\n";
+        std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
         send(fd, err.c_str(), err.size(), 0);
       } else {
         for (size_t i = 2; i < args.size(); i++) {
@@ -96,13 +109,14 @@ void handle_command(int fd, std::vector<std::string> &args) {
       kv_store[key] = data_list;
       send_integer(fd, kv_store[key].list_data.size());
     }
-  } else if (cmd == "LRANGE" && args.size() == 4) {
+}
+
+void command_lrange(int fd, std::vector<std::string> &args) {
     std::string list_key = args[1];
     auto it = kv_store.find(list_key);
     if (it != kv_store.end()) {
       if (it->second.type != ValueType::LIST) {
-        std::string err = "-WRONGTYPE Operation against a key holding the "
-                          "wrong kind of value\r\n";
+        std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
         send(fd, err.c_str(), err.size(), 0);
       } else {
         try {
@@ -148,12 +162,29 @@ void handle_command(int fd, std::vector<std::string> &args) {
     } else {
       send(fd, "*0\r\n", 4, 0);
     }
+}
+
+void handle_command(int fd, std::vector<std::string> &args) {
+  std::string cmd = args[0];
+  for (char &c : cmd)
+    c = toupper((unsigned char)c);
+  if (cmd == "PING") {
+    command_ping(fd);
+  } else if (cmd == "ECHO" && args.size() > 1) {
+    command_echo(fd, args);
+  } else if (cmd == "SET" && args.size() >= 3) {
+    command_set(fd, args);
+  } else if (cmd == "GET" && args.size() >= 2) {
+    command_get(fd, args);
+  } else if (cmd == "RPUSH" && args.size() >= 3) {
+    command_rpush(fd, args);
+  } else if (cmd == "LRANGE" && args.size() == 4) {
+    command_lrange(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {
-    std::string res =
-        "-ERR unknown command or incorrect number of arguments for '" + cmd +
-        "'\r\n";
+    std::string res = "-ERR unknown command or incorrect number of arguments for '" + cmd + "'\r\n";
     send(fd, res.c_str(), res.length(), 0);
   }
 }
+
