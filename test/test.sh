@@ -135,3 +135,75 @@ if [[ "$GET_MISSING_RES" == *"-ERR"* ]]; then
 else
     echo "❌ GET Missing Key Failed (Warning: Server might have crashed!)"
 fi
+
+echo "Testing LPUSH (Normal)..."
+LPUSH_RES=$(send_cmd "*4\r\n\$5\r\nLPUSH\r\n\$7\r\nnewlist\r\n\$2\r\nv2\r\n\$2\r\nv1\r\n")
+if [[ "$LPUSH_RES" == *":2"* ]]; then
+    echo "✅ LPUSH Successful"
+else
+    echo "❌ LPUSH Failed (Got: $LPUSH_RES)"
+fi
+
+echo "Testing LPOP (Normal)..."
+LPOP_RES=$(send_cmd "*2\r\n\$4\r\nLPOP\r\n\$7\r\nnewlist\r\n")
+if [[ "$LPOP_RES" == *"v1"* ]]; then
+    echo "✅ LPOP Successful"
+else
+    echo "❌ LPOP Failed (Got: $LPOP_RES)"
+fi
+
+echo "Testing RPOP (With Count)..."
+RPOP_RES=$(send_cmd "*3\r\n\$4\r\nRPOP\r\n\$7\r\nnewlist\r\n\$1\r\n2\r\n")
+if [[ "$RPOP_RES" == *"v2"* ]]; then
+    echo "✅ RPOP with Count Successful"
+else
+    echo "❌ RPOP with Count Failed (Got: $RPOP_RES)"
+fi
+
+echo "Testing LPUSH (Tricky: Wrong Type)..."
+LPUSH_TYPE_RES=$(send_cmd "*3\r\n\$5\r\nLPUSH\r\n\$3\r\nfoo\r\n\$1\r\nx\r\n")
+if [[ "$LPUSH_TYPE_RES" == *"-WRONGTYPE"* ]]; then
+    echo "✅ LPUSH Wrong Type Handled Safely"
+else
+    echo "❌ LPUSH Wrong Type Failed (Got: $LPUSH_TYPE_RES)"
+fi
+
+echo "Testing LPOP (Tricky: Non-existent key)..."
+LPOP_EMPTY_RES=$(send_cmd "*2\r\n\$4\r\nLPOP\r\n\$8\r\nnothere\r\n")
+if [[ "$LPOP_EMPTY_RES" == *"*0"* ]]; then
+    echo "✅ LPOP Non-existent key Handled Safely"
+else
+    echo "❌ LPOP Non-existent key Failed (Got: $LPOP_EMPTY_RES)"
+fi
+
+echo "Testing RPOP (Tricky: Wrong Type)..."
+RPOP_TYPE_RES=$(send_cmd "*2\r\n\$4\r\nRPOP\r\n\$3\r\nfoo\r\n")
+if [[ "$RPOP_TYPE_RES" == *"-WRONGTYPE"* ]]; then
+    echo "✅ RPOP Wrong Type Handled Safely"
+else
+    echo "❌ RPOP Wrong Type Failed (Got: $RPOP_TYPE_RES)"
+fi
+
+echo "Testing LPOP (Tricky: Non-numeric Count)..."
+LPOP_NONNUM_RES=$(send_cmd "*3\r\n\$4\r\nLPOP\r\n\$6\r\nmylist\r\n\$3\r\nabc\r\n")
+if [[ "$LPOP_NONNUM_RES" == *"a"* ]]; then
+    echo "✅ LPOP Non-numeric Count Handled Safely"
+else
+    echo "❌ LPOP Non-numeric Count Failed (Got: $LPOP_NONNUM_RES)"
+fi
+
+echo "Testing RPOP (Tricky: Too Many Arguments)..."
+RPOP_ARGS_RES=$(send_cmd "*4\r\n\$4\r\nRPOP\r\n\$6\r\nmylist\r\n\$1\r\n1\r\n\$1\r\n2\r\n")
+if [[ "$RPOP_ARGS_RES" == *"-ERR"* ]]; then
+    echo "✅ RPOP Too Many Arguments Handled Safely"
+else
+    echo "❌ RPOP Too Many Arguments Failed (Got: $RPOP_ARGS_RES)"
+fi
+
+echo "Testing RPUSH (Tricky: Missing Arguments)..."
+RPUSH_MISSING_RES=$(send_cmd "*2\r\n\$5\r\nRPUSH\r\n\$6\r\nmylist\r\n")
+if [[ "$RPUSH_MISSING_RES" == *"-ERR"* ]]; then
+    echo "✅ RPUSH Missing Arguments Handled Safely"
+else
+    echo "❌ RPUSH Missing Arguments Failed (Got: $RPUSH_MISSING_RES)"
+fi
