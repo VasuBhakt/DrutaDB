@@ -188,6 +188,100 @@ void command_lrange(int fd, std::vector<std::string> &args) {
     }
 }
 
+void command_lpop(int fd, std::vector<std::string> &args) {
+  int count_pop = 1;
+  if(args.size() == 3) {
+    try {
+      count_pop = std::stoi(args[2]);
+    } catch (...) {
+      count_pop = 1;
+    }
+  } else if(args.size() > 3) {
+    std::string res = "-ERR Invalid number of arguments\r\n";
+    send(fd, res.c_str(), res.size(), 0);
+    return ;
+  }
+  std::string list_key = args[1];
+  auto it = kv_store.find(list_key);
+  if (it != kv_store.end()) {
+    if (it->second.type != ValueType::LIST) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+    } else {
+      int size = (int)it->second.list_data.size();
+      count_pop = std::min(count_pop, size);
+      size_t estimated_size = 10;
+      for (int i = 0; i < count_pop; i++) {
+        estimated_size += it->second.list_data[i].size() + 10;
+      }
+      std::string res; res.reserve(estimated_size + 50);
+      res += "*";
+      res += std::to_string(count_pop);
+      res += "\r\n";
+      while(count_pop) {
+        std::string val = it->second.list_data.front();
+        it->second.list_data.pop_front();
+        res += "$";
+        res += std::to_string(val.size());
+        res += "\r\n";
+        res += val;
+        res += "\r\n";
+        count_pop--;
+      }
+      send(fd, res.c_str(), res.size(), 0);
+    }
+  } else {
+    send(fd, "*0\r\n", 4, 0);
+  }
+}
+
+void command_rpop(int fd, std::vector<std::string> &args) {
+  int count_pop = 1;
+  if(args.size() == 3) {
+    try {
+      count_pop = std::stoi(args[2]);
+    } catch (...) {
+      count_pop = 1;
+    }
+  } else if(args.size() > 3) {
+    std::string res = "-ERR Invalid number of arguments\r\n";
+    send(fd, res.c_str(), res.size(), 0);
+    return ;
+  }
+  std::string list_key = args[1];
+  auto it = kv_store.find(list_key);
+  if (it != kv_store.end()) {
+    if (it->second.type != ValueType::LIST) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+    } else {
+      int size = (int)it->second.list_data.size();
+      count_pop = std::min(count_pop, size);
+      size_t estimated_size = 10;
+      for (int i = 0; i < count_pop; i++) {
+        estimated_size += it->second.list_data[size-1-i].size() + 10;
+      }
+      std::string res; res.reserve(estimated_size + 50);
+      res += "*";
+      res += std::to_string(count_pop);
+      res += "\r\n";
+      while(count_pop) {
+        std::string val = it->second.list_data.back();
+        it->second.list_data.pop_back();
+        res += "$";
+        res += std::to_string(val.size());
+        res += "\r\n";
+        res += val;
+        res += "\r\n";
+        count_pop--;
+      }
+      send(fd, res.c_str(), res.size(), 0);
+    }
+  } else {
+    send(fd, "*0\r\n", 4, 0);
+  }
+}
+
 void handle_command(int fd, std::vector<std::string> &args) {
   std::string cmd = args[0];
   for (char &c : cmd)
@@ -206,6 +300,10 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_lpush(fd, args);
   } else if (cmd == "LRANGE" && args.size() == 4) {
     command_lrange(fd, args);
+  } else if (cmd == "LPOP" && args.size() >= 2) {
+    command_lpop(fd, args);
+  } else if (cmd == "RPOP" && args.size() >= 2) {
+    command_rpop(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {
