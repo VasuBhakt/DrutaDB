@@ -282,6 +282,20 @@ void command_rpop(int fd, std::vector<std::string> &args) {
   }
 }
 
+void command_llen(int fd, std::vector<std::string> &args) {
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    if(it->second.type != ValueType::LIST) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+    } else {
+      send_integer(fd, it->second.list_data.size());
+    }
+  } else {
+    send(fd, "*0\r\n", 4, 0);
+  }
+}
+
 void command_del(int fd, std::vector<std::string> &args) {
   int del_count = 0;
   for(int i=1;i<args.size();i++) {
@@ -318,6 +332,8 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_rpop(fd, args);
   } else if (cmd == "DEL" && args.size() >= 2) {
     command_del(fd, args);
+  } else if (cmd == "LLEN" && args.size() == 2) {
+    command_llen(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {
