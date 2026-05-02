@@ -12,7 +12,7 @@ long long get_current_time_ms() {
       .count();
 }
 
-void send_integer(int fd, size_t data) {
+void send_integer(int fd, int data) {
   std::string res = ":" + std::to_string(data) + "\r\n";
   send(fd, res.c_str(), res.size(), 0);
 }
@@ -282,6 +282,18 @@ void command_rpop(int fd, std::vector<std::string> &args) {
   }
 }
 
+void command_del(int fd, std::vector<std::string> &args) {
+  int del_count = 0;
+  for(int i=1;i<args.size();i++) {
+    auto it = kv_store.find(args[i]);
+    if (it != kv_store.end()) {
+      del_count++;
+      kv_store.erase(args[i]);
+    }
+  }
+  send_integer(fd, del_count);
+}
+
 void handle_command(int fd, std::vector<std::string> &args) {
   std::string cmd = args[0];
   for (char &c : cmd)
@@ -304,6 +316,8 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_lpop(fd, args);
   } else if (cmd == "RPOP" && args.size() >= 2) {
     command_rpop(fd, args);
+  } else if (cmd == "DEL" && args.size() >= 2) {
+    command_del(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {

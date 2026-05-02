@@ -6,6 +6,10 @@ send_cmd() {
     printf "$1" | nc -w 1 localhost 6379
 }
 
+echo "Cleaning up previous state..."
+send_cmd "*7\r\n\$3\r\nDEL\r\n\$3\r\nfoo\r\n\$6\r\nmylist\r\n\$7\r\nnewlist\r\n\$4\r\ndel1\r\n\$4\r\ndel2\r\n\$4\r\ndel3\r\n" > /dev/null
+
+
 echo "Testing PING..."
 # Escape the $ with a backslash: \$
 RESPONSE=$(send_cmd "*1\r\n\$4\r\nPING\r\n")
@@ -206,4 +210,39 @@ if [[ "$RPUSH_MISSING_RES" == *"-ERR"* ]]; then
     echo "✅ RPUSH Missing Arguments Handled Safely"
 else
     echo "❌ RPUSH Missing Arguments Failed (Got: $RPUSH_MISSING_RES)"
+fi
+
+echo "Testing DEL (Single Key)..."
+send_cmd "*3\r\n\$3\r\nSET\r\n\$4\r\ndel1\r\n\$3\r\nval\r\n" > /dev/null
+DEL_SINGLE_RES=$(send_cmd "*2\r\n\$3\r\nDEL\r\n\$4\r\ndel1\r\n")
+if [[ "$DEL_SINGLE_RES" == *":1"* ]]; then
+    echo "✅ DEL Single Key Successful"
+else
+    echo "❌ DEL Single Key Failed (Got: $DEL_SINGLE_RES)"
+fi
+
+echo "Testing DEL (Multiple Keys)..."
+send_cmd "*3\r\n\$3\r\nSET\r\n\$4\r\ndel2\r\n\$3\r\nval\r\n" > /dev/null
+send_cmd "*3\r\n\$3\r\nSET\r\n\$4\r\ndel3\r\n\$3\r\nval\r\n" > /dev/null
+DEL_MULTI_RES=$(send_cmd "*4\r\n\$3\r\nDEL\r\n\$4\r\ndel2\r\n\$4\r\ndel3\r\n\$8\r\nnothere2\r\n")
+if [[ "$DEL_MULTI_RES" == *":2"* ]]; then
+    echo "✅ DEL Multiple Keys Successful"
+else
+    echo "❌ DEL Multiple Keys Failed (Got: $DEL_MULTI_RES)"
+fi
+
+echo "Testing DEL (Non-existent Key)..."
+DEL_EMPTY_RES=$(send_cmd "*2\r\n\$3\r\nDEL\r\n\$7\r\nnothere\r\n")
+if [[ "$DEL_EMPTY_RES" == *":0"* ]]; then
+    echo "✅ DEL Non-existent Key Successful"
+else
+    echo "❌ DEL Non-existent Key Failed (Got: $DEL_EMPTY_RES)"
+fi
+
+echo "Testing DEL (Tricky: Missing Arguments)..."
+DEL_MISSING_RES=$(send_cmd "*1\r\n\$3\r\nDEL\r\n")
+if [[ "$DEL_MISSING_RES" == *"-ERR"* ]]; then
+    echo "✅ DEL Missing Arguments Handled Safely"
+else
+    echo "❌ DEL Missing Arguments Failed (Got: $DEL_MISSING_RES)"
 fi
