@@ -111,6 +111,30 @@ void command_rpush(int fd, std::vector<std::string> &args) {
     }
 }
 
+void command_lpush(int fd, std::vector<std::string> &args) {
+  std::string key = args[1];
+  auto it = kv_store.find(key);
+  if (it != kv_store.end()) {
+    if (it->second.type != ValueType::LIST) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+    } else {
+      for (size_t i = 2; i < args.size(); i++) {
+        it->second.list_data.push_front(args[i]);
+      }
+      send_integer(fd, it->second.list_data.size());
+    }
+  } else {
+    RedisValue data_list;
+    data_list.type = ValueType::LIST;
+    for (size_t i = 2; i < args.size(); i++) {
+      data_list.list_data.push_front(args[i]);
+    }
+    kv_store[key] = data_list;
+    send_integer(fd, kv_store[key].list_data.size());
+  }
+}
+
 void command_lrange(int fd, std::vector<std::string> &args) {
     std::string list_key = args[1];
     auto it = kv_store.find(list_key);
@@ -174,10 +198,12 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_echo(fd, args);
   } else if (cmd == "SET" && args.size() >= 3) {
     command_set(fd, args);
-  } else if (cmd == "GET" && args.size() >= 2) {
+  } else if (cmd == "GET" && args.size() == 2) {
     command_get(fd, args);
   } else if (cmd == "RPUSH" && args.size() >= 3) {
     command_rpush(fd, args);
+  } else if(cmd == "LPUSH" && args.size() >= 3) {
+    command_lpush(fd, args);
   } else if (cmd == "LRANGE" && args.size() == 4) {
     command_lrange(fd, args);
   } else if (cmd == "COMMAND") {
