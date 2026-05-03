@@ -18,6 +18,7 @@ add_executable(drutadb
     src/store.cpp
     src/commands.cpp
     src/parser_resp.cpp
+    src/aof.cpp
 )
 
 # Linking pthreads for Linux/WSL networking

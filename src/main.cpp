@@ -11,6 +11,7 @@
 #include <poll.h>
 #include <netdb.h>
 #include "parser_resp.hpp"
+#include "aof.hpp"
 
 int main(int argc, char **argv) {
     // Flush after every std::cout / std::cerr
@@ -19,6 +20,10 @@ int main(int argc, char **argv) {
     // for a buffer to fill up. Essential for debugging!
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
+
+    std::cout << "Replaying AOF..." << std::endl;
+    replay_aof();
+    std::cout << "AOF Replay complete!" << std::endl;
     
     // socket() creates an endpoint for communication.
     // AF_INET: Use IPv4 addresses.

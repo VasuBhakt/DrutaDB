@@ -21,6 +21,7 @@ struct RespParser {
 
   void reset();
   void parse_and_execute(const char *buffer, int length, int fd);
+  void resp_bulk_string(std::string& res, const std::string& val);
 };
 
 #endif

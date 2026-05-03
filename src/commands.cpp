@@ -1,9 +1,15 @@
 #include "commands.hpp"
 #include "store.hpp"
+#include "aof.hpp"
+#include "parser_resp.hpp"
 #include <algorithm>
 #include <chrono>
 #include <string>
 #include <sys/socket.h>
+
+// check that send doesn't send any fd = -1
+#undef send
+#define send(fd, buf, len, flags) do { if((fd) != -1) ::send((fd), (buf), (len), (flags)); } while(0)
 
 long long get_current_time_ms() {
   auto now = std::chrono::system_clock::now();
@@ -23,12 +29,9 @@ void command_ping(int fd) {
 
 void command_echo(int fd, std::vector<std::string> &args) {
   std::string res;
-  res.reserve(args[1].length()+50);
-  res += "$";
-  res += std::to_string(args[1].length());
-  res += "\r\n";
-  res += args[1];
-  res += "\r\n";
+  res.reserve(args[1].length()+64);
+  RespParser parser;
+  parser.resp_bulk_string(res,args[1]);
   send(fd, res.c_str(), res.length(), 0);
 }
 
@@ -48,6 +51,10 @@ void command_set(int fd, std::vector<std::string> &args) {
         } else if (opt == "PX" && i + 1 < args.size()) {
           long long ms = std::stoll(args[i + 1]);
           expire_at = get_current_time_ms() + ms;
+          i++;
+        } else if (opt == "PXAT" && i+1<args.size()) {
+          long long ms = std::stoll(args[i+1]);
+          expire_at = ms;
           i++;
         }
       }
@@ -73,12 +80,9 @@ void command_get(int fd, std::vector<std::string> &args) {
         } else {
           std::string val = it->second.data;
           std::string res;
-          res.reserve(val.length()+50);
-          res += "$";
-          res += std::to_string(val.length());
-          res += "\r\n";
-          res += val;
-          res += "\r\n";
+          res.reserve(val.length()+64);
+          RespParser parser;
+          parser.resp_bulk_string(res,val);
           send(fd, res.c_str(), res.length(), 0);
         }
       }
@@ -157,22 +161,19 @@ void command_lrange(int fd, std::vector<std::string> &args) {
           } else if (li > ri) {
             send(fd, "*0\r\n", 4, 0);
           } else if (0 <= li && ri <= size - 1 && li <= ri) {
-            size_t estimated_size = 10;
+            size_t estimated_size = 16;
             for (int i = 0; i <= ri - li; i++) {
-              estimated_size += it->second.list_data[i + li].size() + 10;
+              estimated_size += it->second.list_data[i + li].size() + 16;
             }
             std::string res;
-            res.reserve(estimated_size + 50);
+            res.reserve(estimated_size + 64);
             res += "*";
             res += std::to_string(ri - li + 1);
             res += "\r\n";
             for (int i = 0; i <= ri - li; i++) {
               const std::string &val = it->second.list_data[i + li];
-              res += "$";
-              res += std::to_string(val.size());
-              res += "\r\n";
-              res += val;
-              res += "\r\n";
+              RespParser parser;
+              parser.resp_bulk_string(res,val);
             }
             send(fd, res.c_str(), res.size(), 0);
           } else {
@@ -210,22 +211,19 @@ void command_lpop(int fd, std::vector<std::string> &args) {
     } else {
       int size = (int)it->second.list_data.size();
       count_pop = std::min(count_pop, size);
-      size_t estimated_size = 10;
+      size_t estimated_size = 16;
       for (int i = 0; i < count_pop; i++) {
-        estimated_size += it->second.list_data[i].size() + 10;
+        estimated_size += it->second.list_data[i].size() + 16;
       }
-      std::string res; res.reserve(estimated_size + 50);
+      std::string res; res.reserve(estimated_size + 64);
       res += "*";
       res += std::to_string(count_pop);
       res += "\r\n";
       while(count_pop) {
         std::string val = it->second.list_data.front();
         it->second.list_data.pop_front();
-        res += "$";
-        res += std::to_string(val.size());
-        res += "\r\n";
-        res += val;
-        res += "\r\n";
+        RespParser parser;
+        parser.resp_bulk_string(res,val);
         count_pop--;
       }
       send(fd, res.c_str(), res.size(), 0);
@@ -257,22 +255,19 @@ void command_rpop(int fd, std::vector<std::string> &args) {
     } else {
       int size = (int)it->second.list_data.size();
       count_pop = std::min(count_pop, size);
-      size_t estimated_size = 10;
+      size_t estimated_size = 16;
       for (int i = 0; i < count_pop; i++) {
-        estimated_size += it->second.list_data[size-1-i].size() + 10;
+        estimated_size += it->second.list_data[size-1-i].size() + 16;
       }
-      std::string res; res.reserve(estimated_size + 50);
+      std::string res; res.reserve(estimated_size + 64);
       res += "*";
       res += std::to_string(count_pop);
       res += "\r\n";
       while(count_pop) {
         std::string val = it->second.list_data.back();
         it->second.list_data.pop_back();
-        res += "$";
-        res += std::to_string(val.size());
-        res += "\r\n";
-        res += val;
-        res += "\r\n";
+        RespParser parser;
+        parser.resp_bulk_string(res,val);
         count_pop--;
       }
       send(fd, res.c_str(), res.size(), 0);
@@ -309,6 +304,7 @@ void command_del(int fd, std::vector<std::string> &args) {
 }
 
 void handle_command(int fd, std::vector<std::string> &args) {
+  
   std::string cmd = args[0];
   for (char &c : cmd)
     c = toupper((unsigned char)c);
@@ -339,6 +335,11 @@ void handle_command(int fd, std::vector<std::string> &args) {
   } else {
     std::string res = "-ERR unknown command or incorrect number of arguments for '" + cmd + "'\r\n";
     send(fd, res.c_str(), res.length(), 0);
+  }
+  // If client fd is valid, append args
+  if(fd != -1) {
+    append_to_aof(args);
+    check_and_rewrite_aof();
   }
 }
 

@@ -70,3 +70,12 @@ void RespParser::parse_and_execute(const char *buffer, int length, int fd) {
     }
   }
 }
+
+void RespParser::resp_bulk_string(std::string& res, const std::string& val) {
+  res += "$";
+  res += std::to_string(val.length());
+  res += "\r\n";
+  res += val;
+  res += "\r\n";
+  return ;
+}
