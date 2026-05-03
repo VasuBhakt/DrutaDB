@@ -156,7 +156,7 @@ void check_and_rewrite_aof() {
   
         // 1. File > 1KB (for testing, should be ideally >10kb)
         // 2. File has doubled (grown by 100%) since last rewrite
-        if (size > 256 && size > last_rewrite_size * 2) {
+        if (size > 1 * 1024 && size > last_rewrite_size * 2) {
           rewrite_aof();
         }
       }
