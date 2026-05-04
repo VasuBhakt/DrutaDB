@@ -16,7 +16,7 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **AOF Persistence & Durability:** Implements Append-Only File (AOF) logging to ensure data durability across server restarts. Mutating commands are serialized into RESP format and committed to disk after successful execution.
 
-- **Smart AOF Rewriting:** Features a growth-based trigger mechanism ($Size > last\_rewrite\_size \times 2$) to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
+- **Smart AOF Rewriting:** Features a growth-based trigger mechanism to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
 
 ## 🛠️ Supported Commands
 
@@ -36,7 +36,7 @@ DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 
 ## 💾 Persistence (AOF)
 
-DrutaDB ensures data durability using an **Append-Only File (AOF)**:
+DrutaDB ensures data persistence using an **Append-Only File (AOF)**:
 
 - **Logging Strategy:** Commands are logged to `data/drutadb.aof` in standard RESP format.
 - **State Recovery:** During startup, the server replays the AOF through the internal `RespParser` to restore the memory state.
