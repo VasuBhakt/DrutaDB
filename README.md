@@ -14,6 +14,10 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **Lazy Eviction:** Supports key Time-to-Live (TTL). Expired keys are lazily evaluated and evicted upon read attempts (`GET`).
 
+- **AOF Persistence & Durability:** Implements Append-Only File (AOF) logging to ensure data durability across server restarts. Mutating commands are serialized into RESP format and committed to disk after successful execution.
+
+- **Smart AOF Rewriting:** Features a growth-based trigger mechanism ($Size > last\_rewrite\_size \times 2$) to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
+
 ## 🛠️ Supported Commands
 
 DrutaDB currently supports a subset of standard commands over TCP port `6379`:
@@ -24,6 +28,20 @@ DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 - `GET <key>`
 - `RPUSH <list_name> <element1> <element2> ...` (List data structure)
 - `LRANGE <list_name> <start_index> <end_index>` (Get elements within range from list)
+- `LPUSH <list_name> <element1> <element2> ...` (Prepend elements to list)
+- `LPOP <list_name> [count]` (Remove and return elements from head)
+- `RPOP <list_name> [count]` (Remove and return elements from tail)
+- `DEL <key1> <key2> ...` (Delete one or more keys)
+- `LLEN <list_name>` (Get list length)
+
+## 💾 Persistence (AOF)
+
+DrutaDB ensures data durability using an **Append-Only File (AOF)**:
+
+- **Logging Strategy:** Commands are logged to `data/drutadb.aof` in standard RESP format.
+- **State Recovery:** During startup, the server replays the AOF through the internal `RespParser` to restore the memory state.
+- **Rewrite Trigger:** To optimize disk space, the server triggers a rewrite when the AOF exceeds 10KB and has doubled in size relative to the previous base.
+- **Crash Safety:** The rewrite process generates a temporary file and utilizes `std::filesystem::rename` for an atomic swap, ensuring that a crash during the rewrite never results in data loss or corruption.
 
 ## 🌍 Supported Environments
 
@@ -70,17 +88,19 @@ OK
 2) "item2"
 
 ```
---- 
+
+---
 
 ## 🧪 Test Scripts
 
-Shell scripts for testing are added in the ```test``` folder.
+Shell scripts for testing are added in the `test` folder.
 Run them from root of folder by following command:
 
 ```bash
 chmod +x ./test.sh
 ```
-(for initial test, just ```./test.sh``` works for later runs)
+
+(for initial test, just `./test.sh` works for later runs)
 
 ---
 
