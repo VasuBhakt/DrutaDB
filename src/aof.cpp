@@ -153,7 +153,7 @@ void rewrite_aof() {
   } catch (std::filesystem::filesystem_error &e) {
     std::cerr << "[AOF Error] Failed to rename temporary AOF file: " << e.what()
               << std::endl;
-    aof_file.open("drutadb.aof", std::ios::app); // keep aof file
+    aof_file.open(main_path, std::ios::app); // keep aof file
   }
 }
 
