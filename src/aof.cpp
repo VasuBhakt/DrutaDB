@@ -27,7 +27,7 @@ static fs::path get_aof_path(bool is_temp = false) {
 
 static std::ofstream aof_file(get_aof_path(), std::ios::app);
 static uintmax_t last_rewrite_size = 0; // Tracks size after last cleanup
-static const uintmax_t REWRITE_THRESHOLD = 1 * 1024;
+static const uintmax_t REWRITE_THRESHOLD = 10 * 1024;
 
 // check for commands which modify state of kv_store
 // implemented with atd:;array + binary_search
