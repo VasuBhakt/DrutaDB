@@ -62,8 +62,8 @@ int main(int argc, char **argv) {
     }
 
     // listen() tells the OS we are ready to receive connections.
-    // connection_backlog = 5 means 5 pending connections can wait in queue.
-    int connection_backlog = 5;
+    // connection_backlog = 128 means 128 pending connections can wait in queue.
+    int connection_backlog = 128;
     if (listen(server_fd, connection_backlog) != 0) {
         std::cerr << "listen failed\n";
         return 1;
@@ -88,6 +88,10 @@ int main(int argc, char **argv) {
         if(new_events < 0) {
             std::cerr<<"Poll failed\n";
             break;
+        }
+        if (new_events == 0) {
+            flush_aof();
+            continue;
         }
         // 3. Loop through our watchlist to see who signaled us
         for(size_t i=0;i<poll_fds.size();i++) {
@@ -126,7 +130,7 @@ int main(int argc, char **argv) {
                     } else {
                         client_parsers[current_client_fd].parse_and_execute(buffer, bytes_recieved, current_client_fd);
                         // send(current_client_fd, response, strlen(response), 0);
-                        flush_aof();
+                        //flush_aof();
                     }
                 }
             }
