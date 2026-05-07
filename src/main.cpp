@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <poll.h>
+#include <netinet/tcp.h>
 #include <netdb.h>
 #include "parser_resp.hpp"
 #include "aof.hpp"
@@ -83,7 +84,7 @@ int main(int argc, char **argv) {
     while(true) {
         // 2. Ask the OS to wait until SOMETHING happens
         // poll (list(pointer to vector), size, timeout_in_ms)
-        int new_events = poll(poll_fds.data(), poll_fds.size(), -1);
+        int new_events = poll(poll_fds.data(), poll_fds.size(), 100);
         if(new_events < 0) {
             std::cerr<<"Poll failed\n";
             break;
@@ -98,6 +99,10 @@ int main(int argc, char **argv) {
                     int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
                     if(client_fd >= 0) {
                         std::cout << "Client connected!\n";
+                        // Disable Nagle's algorithm to prevent delayed ACK
+                        // interaction that kills pipelining throughput
+                        int flag = 1;
+                        setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag));
                         // add NEW client to watchlist
                         struct pollfd client_pfd;
                         client_pfd.fd = client_fd;
@@ -107,7 +112,7 @@ int main(int argc, char **argv) {
                 } else {
                     // EVENT : An existing client sent a message (PING)
                     int current_client_fd = poll_fds[i].fd;
-                    char buffer[1024];
+                    char buffer[16384];
                     int bytes_recieved = recv(current_client_fd, buffer, sizeof(buffer), 0);
                     if(bytes_recieved <= 0) {
                         std::cout<<"Client disconnected\n";
@@ -121,10 +126,12 @@ int main(int argc, char **argv) {
                     } else {
                         client_parsers[current_client_fd].parse_and_execute(buffer, bytes_recieved, current_client_fd);
                         // send(current_client_fd, response, strlen(response), 0);
+                        flush_aof();
                     }
                 }
             }
         }
+        flush_aof(); // Periodic flush (everysec check inside)
     }
     close(server_fd);
     return 0;

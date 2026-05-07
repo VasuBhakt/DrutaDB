@@ -12,17 +12,23 @@
 
 namespace fs = std::filesystem;
 
-static fs::path get_aof_path(bool is_temp = false) {
-  fs::path p = fs::current_path();
+static fs::path cached_aof_path;
+static fs::path cached_temp_aof_path;
 
-  // Go up if we are inside ANY folder that looks like a build directory
+static void init_aof_paths() {
+  fs::path p = fs::current_path();
   std::string folder = p.filename().string();
   if (folder == "build" || folder == "cmake-build-debug" || folder == "bin") {
     p = p.parent_path();
   }
-
   fs::create_directory(p / "data");
-  return p / "data" / (is_temp ? "drutadb.aof.tmp" : "drutadb.aof");
+  cached_aof_path = p / "data" / "drutadb.aof";
+  cached_temp_aof_path = p / "data" / "drutadb.aof.tmp";
+}
+
+static fs::path get_aof_path(bool is_temp = false) {
+  if (cached_aof_path.empty()) init_aof_paths();
+  return is_temp ? cached_temp_aof_path : cached_aof_path;
 }
 
 static std::ofstream aof_file(get_aof_path(), std::ios::app);
@@ -72,9 +78,25 @@ void append_to_aof(const std::vector<std::string> &args) {
 
   if (aof_file.is_open()) {
     aof_file << resp;
-    aof_file.flush();
   }
 }
+
+void flush_aof() {
+  static auto last_flush = std::chrono::steady_clock::now();
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flush)
+          .count();
+
+  // "everysec" policy: flush if force=true OR 1 second has passed
+  if (elapsed >= 1000) {
+    if (aof_file.is_open()) {
+      aof_file.flush();
+      last_flush = now;
+    }
+  }
+}
+
 
 void replay_aof() {
   fs::path p = get_aof_path();
@@ -158,6 +180,17 @@ void rewrite_aof() {
 }
 
 void check_and_rewrite_aof() {
+  static auto last_size_check = std::chrono::steady_clock::now();
+  auto now = std::chrono::steady_clock::now();
+  auto elapsed =
+      std::chrono::duration_cast<std::chrono::seconds>(now - last_size_check)
+          .count();
+
+  // Only hit the disk to check size every 5 seconds
+  if (elapsed < 5)
+    return;
+
+  last_size_check = now;
   try {
     fs::path p = get_aof_path();
 
