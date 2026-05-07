@@ -43,6 +43,22 @@ DrutaDB ensures data persistence using an **Append-Only File (AOF)**:
 - **Rewrite Trigger:** To optimize disk space, the server triggers a rewrite when the AOF exceeds 10KB and has doubled in size relative to the previous base.
 - **Crash Safety:** The rewrite process generates a temporary file and utilizes `std::filesystem::rename` for an atomic swap, ensuring that a crash during the rewrite never results in data loss or corruption.
 
+## 🏎️ Performance & Benchmarking
+
+DrutaDB is optimized for high-throughput, low-latency workloads. Below are representative results from the internal benchmarking suite (`test/benchmark.py`):
+
+| Metric                                | Result            |
+| :------------------------------------ | :---------------- |
+| **Single-client Sequential SET**      | **~12,000 req/s** |
+| **Pipelined SET (x50 batch)**         | **~61,000 req/s** |
+| **Concurrent Clients (10 clients)**   | **~10,000 req/s** |
+| **Mixed Keyspace (80/20 Read/Write)** | **~10,000 req/s** |
+
+### Key Optimizations:
+
+- **`everysec` AOF Policy:** Implements a time-buffered disk flush (every 1 second), maintaining a p99 tail latency of 0.31ms and sustained 10k+ req/s under concurrent load.
+- **TCP_NODELAY:** Disables Nagle's algorithm to eliminate the delayed-ACK penalty, enabling **4.8x higher throughput** for pipelined operations, compared to sequential baseline.
+
 ## 🌍 Supported Environments
 
 Due to its reliance on standard POSIX APIs (`poll`, `socket`, `arpa/inet.h`), DrutaDB is highly portable and natively supported in the following environments:

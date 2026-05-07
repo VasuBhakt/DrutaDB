@@ -27,7 +27,8 @@ static void init_aof_paths() {
 }
 
 static fs::path get_aof_path(bool is_temp = false) {
-  if (cached_aof_path.empty()) init_aof_paths();
+  if (cached_aof_path.empty())
+    init_aof_paths();
   return is_temp ? cached_temp_aof_path : cached_aof_path;
 }
 
@@ -88,7 +89,7 @@ void flush_aof() {
       std::chrono::duration_cast<std::chrono::milliseconds>(now - last_flush)
           .count();
 
-  // "everysec" policy: flush if force=true OR 1 second has passed
+  // "everysec" policy: flush if 1 second has passed
   if (elapsed >= 1000) {
     if (aof_file.is_open()) {
       aof_file.flush();
@@ -96,7 +97,6 @@ void flush_aof() {
     }
   }
 }
-
 
 void replay_aof() {
   fs::path p = get_aof_path();
