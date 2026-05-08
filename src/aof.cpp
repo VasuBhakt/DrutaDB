@@ -209,3 +209,21 @@ void check_and_rewrite_aof() {
     // Silently ignore if file is busy or locked
   }
 }
+
+void flush_clear_aof() {
+  if(aof_file.is_open()) {
+    aof_file.close();
+  }
+  fs::path main_path = get_aof_path();
+  aof_file.open(main_path, std::ios::out | std::ios::trunc);
+  if (!aof_file.is_open()) {
+    std::cerr << "[AOF Error] Could not open file for flush."
+              << std::endl;
+  }
+  aof_file.close();
+  aof_file.open(main_path, std::ios::app);
+  if (!aof_file.is_open()) {
+    std::cerr << "[AOF Error] Could not open file for rewrite."
+              << std::endl;
+  }
+}

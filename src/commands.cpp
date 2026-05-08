@@ -303,6 +303,23 @@ void command_del(int fd, std::vector<std::string> &args) {
   send_integer(fd, del_count);
 }
 
+void command_flushdb(int fd, std::vector<std::string> &args) {
+  if(args.size() < 2 || args[1]!="--sure") {
+    std::string err = "-ERR add --sure flag to flush db\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  try {
+    kv_store.clear();
+    flush_clear_aof();
+    std::string res = "+SUCCESS Database flushed\r\n";
+    send(fd, res.c_str(), res.size(), 0);
+  } catch (...) {
+    std::string err = "-ERR error flushing database\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+  }
+}
+
 void handle_command(int fd, std::vector<std::string> &args) {
   
   std::string cmd = args[0];
@@ -330,6 +347,8 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_del(fd, args);
   } else if (cmd == "LLEN" && args.size() == 2) {
     command_llen(fd, args);
+  } else if (cmd == "FLUSHDB") {
+    command_flushdb(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {
