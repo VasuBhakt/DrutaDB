@@ -35,6 +35,7 @@ DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 - `RPOP <list_name> [count]` (Remove and return elements from tail)
 - `DEL <key1> <key2> ...` (Delete one or more keys)
 - `LLEN <list_name>` (Get list length)
+- `FLUSHDB --sure` (remove all keys from store, --sure flag is necessary to prevent accidental deletions)
 
 ## 💾 Persistence (AOF)
 
