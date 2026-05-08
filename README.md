@@ -70,6 +70,9 @@ DrutaDB is optimized for high-throughput, low-latency workloads. Below are repre
 - **`everysec` AOF Policy:** Implements a time-buffered disk flush (every 1 second), maintaining a p99 tail latency of 0.31ms and sustained 10k+ req/s under concurrent load.
 - **TCP_NODELAY:** Disables Nagle's algorithm to eliminate the delayed-ACK penalty, enabling **4.8x higher throughput** for pipelined operations, compared to sequential baseline.
 
+> [!NOTE]
+> **Benchmark Environment:** Tests conducted on an **12th Gen Intel(R) Core(TM) i5-1235U** with peak throughput measured during Turbo Boost. Results may vary based on CPU thermal limits and background process interference.
+
 ## 🌍 Supported Environments
 
 Due to its reliance on standard POSIX APIs (`poll`, `socket`, `arpa/inet.h`), DrutaDB is highly portable and natively supported in the following environments:
