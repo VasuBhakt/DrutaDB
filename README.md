@@ -59,10 +59,11 @@ DrutaDB is optimized for high-throughput, low-latency workloads. Below are repre
 
 | Metric                                | Result            |
 | :------------------------------------ | :---------------- |
-| **Single-client Sequential SET**      | **~12,000 req/s** |
-| **Pipelined SET (x50 batch)**         | **~61,000 req/s** |
-| **Concurrent Clients (10 clients)**   | **~10,000 req/s** |
-| **Mixed Keyspace (80/20 Read/Write)** | **~10,000 req/s** |
+| **Single-client Sequential SET**      | **~21,000 req/s** |
+| **Pipelined SET (x50 batch)**         | **~97,000 req/s** |
+| **Concurrent Clients (10 clients)**   | **~41,500 req/s** |
+| **Mixed Keyspace (70/30 Read/Write)** | **~20,800 req/s** |
+| **List Operations (RPUSH/LPOP)**      | **~20,000 req/s** |
 
 ### Key Optimizations:
 

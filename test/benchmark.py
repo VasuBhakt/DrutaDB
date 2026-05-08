@@ -55,49 +55,34 @@ def recv_exact(sock: socket.socket, n: int) -> bytes:
     return buf
 
 
-def recv_response(sock: socket.socket) -> bytes:
+def recv_response(f) -> bytes:
     """
-    Read one complete RESP response.
+    Read one complete RESP response from a file-like object.
     Handles: +simple  -error  :integer  $bulk  *array (shallow)
     Returns the raw bytes (including the type byte and CRLF).
     """
-    buf = b""
-    while b"\r\n" not in buf:
-        buf += sock.recv(256)
+    line = f.readline()
+    if not line:
+        raise ConnectionError("Server closed connection unexpectedly")
 
-    line, rest = buf.split(b"\r\n", 1)
     kind = chr(line[0])
 
     if kind in ("+", "-", ":"):
-        return line + b"\r\n"
+        return line
 
     if kind == "$":
-        length = int(line[1:])
+        length = int(line[1:-2])
         if length == -1:
-            return line + b"\r\n"  # null bulk
-        needed = length + 2 - len(rest)
-        if needed > 0:
-            rest += recv_exact(sock, needed)
-        return line + b"\r\n" + rest[: length + 2]
+            return line  # null bulk
+        data = f.read(length + 2)
+        return line + data
 
     if kind == "*":
-        count = int(line[1:])
-        result = line + b"\r\n"
-        sock_buf = rest
+        count = int(line[1:-2])
+        result = line
         for _ in range(count):
-            # read each element; minimal – only handles bulk strings here
-            while b"\r\n" not in sock_buf:
-                sock_buf += sock.recv(256)
-            el_line, sock_buf = sock_buf.split(b"\r\n", 1)
-            result += el_line + b"\r\n"
-            if chr(el_line[0]) == "$":
-                el_len = int(el_line[1:])
-                if el_len != -1:
-                    needed = el_len + 2 - len(sock_buf)
-                    if needed > 0:
-                        sock_buf += recv_exact(sock, needed)
-                    result += sock_buf[: el_len + 2]
-                    sock_buf = sock_buf[el_len + 2 :]
+            el = recv_response(f)
+            result += el
         return result
 
     raise ValueError(f"Unknown RESP type byte: {kind!r}")
@@ -154,10 +139,11 @@ def print_latency(stats: dict):
 def warmup():
     print(f"Warming up ({WARMUP_REQUESTS} requests)...", end=" ", flush=True)
     s = make_connection()
+    f = s.makefile("rb")
     cmd = encode_cmd("SET", "warmup", "val")
     for _ in range(WARMUP_REQUESTS):
         s.sendall(cmd)
-        recv_response(s)
+        recv_response(f)
     s.close()
     print("done\n")
 
@@ -166,8 +152,9 @@ def warmup():
 
 
 def bench_single_client():
-    print(f"[1/4] Single-client sequential SET  ({TOTAL_REQUESTS:,} requests)")
+    print(f"[1/5] Single-client sequential SET  ({TOTAL_REQUESTS:,} requests)")
     s = make_connection()
+    f = s.makefile("rb")
     cmd = encode_cmd("SET", "bench:single", "value")
     latencies = []
 
@@ -175,7 +162,7 @@ def bench_single_client():
     for _ in range(TOTAL_REQUESTS):
         ts = time.perf_counter()
         s.sendall(cmd)
-        recv_response(s)
+        recv_response(f)
         latencies.append(time.perf_counter() - ts)
     total = time.perf_counter() - t0
     s.close()
@@ -192,29 +179,24 @@ def bench_single_client():
 
 
 def bench_pipeline():
-    print(f"[2/4] Pipelining  (pipeline={PIPELINE_SIZE}, total={TOTAL_REQUESTS:,})")
+    print(f"[2/5] Pipelining  (pipeline={PIPELINE_SIZE}, total={TOTAL_REQUESTS:,})")
     s = make_connection()
+    f = s.makefile("rb")
     cmd = encode_cmd("SET", "bench:pipe", "value")
     pipeline = cmd * PIPELINE_SIZE
     batches = TOTAL_REQUESTS // PIPELINE_SIZE
-    ok_resp = b"+OK\r\n"
 
     t0 = time.perf_counter()
     for _ in range(batches):
         s.sendall(pipeline)
-        received = 0
-        buf = b""
-        while received < PIPELINE_SIZE:
-            buf += s.recv(4096)
-            received += buf.count(ok_resp)
-            buf = buf[buf.rfind(ok_resp) + 5 :] if ok_resp in buf else buf
+        for _ in range(PIPELINE_SIZE):
+            recv_response(f)
     total = time.perf_counter() - t0
     s.close()
 
     actual = batches * PIPELINE_SIZE
     rps = actual / total
     print(f"  Throughput  {rps:,.0f} req/s  |  total {total:.3f}s")
-    print(f"  Pipelining speedup vs sequential: measured separately above")
     print()
     return rps
 
@@ -222,9 +204,10 @@ def bench_pipeline():
 # ─── Benchmark 3: Concurrent clients ─────────────────────────────────────────
 
 
-def _worker(requests_per_client: int, workload: str) -> tuple[float, list[float]]:
-    """Single worker thread. Returns (elapsed_seconds, [per-request latencies])."""
+def _worker(requests_per_client: int, workload: str) -> list[float]:
+    """Single worker thread. Returns [per-request latencies]."""
     s = make_connection()
+    f = s.makefile("rb")
     latencies = []
 
     for i in range(requests_per_client):
@@ -241,7 +224,7 @@ def _worker(requests_per_client: int, workload: str) -> tuple[float, list[float]
 
         ts = time.perf_counter()
         s.sendall(cmd)
-        recv_response(s)
+        recv_response(f)
         latencies.append(time.perf_counter() - ts)
 
     s.close()
@@ -253,11 +236,13 @@ def bench_concurrent(workload: str = "set"):
     label = {"set": "SET only", "get": "GET only", "mixed": "80% GET / 20% SET"}[
         workload
     ]
-    print(f"[3/4] {NUM_CLIENTS} concurrent clients  –  {label}  ({rpc:,} req/client)")
+    print(f"[3/5] {NUM_CLIENTS} concurrent clients  –  {label}  ({rpc:,} req/client)")
 
     all_latencies = []
     t0 = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=NUM_CLIENTS) as pool:
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(max_workers=NUM_CLIENTS) as pool:
         futures = [pool.submit(_worker, rpc, workload) for _ in range(NUM_CLIENTS)]
         for f in as_completed(futures):
             all_latencies.extend(f.result())
@@ -277,33 +262,48 @@ def bench_concurrent(workload: str = "set"):
 
 def bench_mixed_keyspace():
     print(
-        f"[4/4] Mixed workload  –  {KEY_SPACE:,}-key space  ({TOTAL_REQUESTS:,} requests)"
+        f"[4/5] Mixed workload  –  {KEY_SPACE:,}-key space  ({TOTAL_REQUESTS:,} requests)"
     )
     # Pre-populate with random keys so GETs can hit real data
-    print("  Pre-populating keys...", end=" ", flush=True)
+    print(f"  Pre-populating {KEY_SPACE} keys...", end=" ", flush=True)
     s = make_connection()
-    for i in range(min(KEY_SPACE, 2000)):
+    f = s.makefile("rb")
+    for i in range(KEY_SPACE):
         s.sendall(encode_cmd("SET", f"key:{i}", random_value()))
-        recv_response(s)
+        recv_response(f)
     print("done")
 
     latencies_set = []
     latencies_get = []
+    latencies_list = []
 
     t0 = time.perf_counter()
     for _ in range(TOTAL_REQUESTS):
         key = random_key()
-        if random.random() < 0.2:
+        r = random.random()
+        if r < 0.2:  # 20% SET
             cmd = encode_cmd("SET", key, random_value())
             ts = time.perf_counter()
             s.sendall(cmd)
-            recv_response(s)
+            recv_response(f)
             latencies_set.append(time.perf_counter() - ts)
-        else:
+        elif r < 0.3:  # 10% RPUSH
+            cmd = encode_cmd("RPUSH", f"list:{key}", random_value())
+            ts = time.perf_counter()
+            s.sendall(cmd)
+            recv_response(f)
+            latencies_list.append(time.perf_counter() - ts)
+        elif r < 0.35:  # 5% LPOP
+            cmd = encode_cmd("LPOP", f"list:{key}")
+            ts = time.perf_counter()
+            s.sendall(cmd)
+            recv_response(f)
+            latencies_list.append(time.perf_counter() - ts)
+        else:  # 65% GET
             cmd = encode_cmd("GET", key)
             ts = time.perf_counter()
             s.sendall(cmd)
-            recv_response(s)
+            recv_response(f)
             latencies_get.append(time.perf_counter() - ts)
     total = time.perf_counter() - t0
     s.close()
@@ -319,6 +319,63 @@ def bench_mixed_keyspace():
         gt = latency_stats(latencies_get)
         print(
             f"  GET  p50={gt['p50_ms']}ms  p99={gt['p99_ms']}ms  ({len(latencies_get)} ops)"
+        )
+    if latencies_list:
+        lt = latency_stats(latencies_list)
+        print(
+            f"  LIST p50={lt['p50_ms']}ms  p99={lt['p99_ms']}ms  ({len(latencies_list)} ops)"
+        )
+    print()
+    return rps
+
+
+# ─── Benchmark 5: List Operations ─────────────────────────────────────────────
+
+
+def bench_list_operations():
+    print(f"[5/5] List Operations  –  RPUSH and LPOP  ({TOTAL_REQUESTS:,} requests)")
+    s = make_connection()
+    f = s.makefile("rb")
+    list_key = "bench:list"
+
+    # Cleanup if exists
+    s.sendall(encode_cmd("DEL", list_key))
+    recv_response(f)
+
+    latencies_rpush = []
+    latencies_lpop = []
+
+    t0 = time.perf_counter()
+    # 1. Benchmark RPUSH
+    for _ in range(TOTAL_REQUESTS // 2):
+        cmd = encode_cmd("RPUSH", list_key, random_value())
+        ts = time.perf_counter()
+        s.sendall(cmd)
+        recv_response(f)
+        latencies_rpush.append(time.perf_counter() - ts)
+
+    # 2. Benchmark LPOP
+    for _ in range(TOTAL_REQUESTS // 2):
+        cmd = encode_cmd("LPOP", list_key)
+        ts = time.perf_counter()
+        s.sendall(cmd)
+        recv_response(f)
+        latencies_lpop.append(time.perf_counter() - ts)
+
+    total = time.perf_counter() - t0
+    s.close()
+
+    rps = TOTAL_REQUESTS / total
+    print(f"  Throughput  {rps:,.0f} req/s  |  total {total:.3f}s")
+    if latencies_rpush:
+        st = latency_stats(latencies_rpush)
+        print(
+            f"  RPUSH  p50={st['p50_ms']}ms  p99={st['p99_ms']}ms  ({len(latencies_rpush)} ops)"
+        )
+    if latencies_lpop:
+        lt = latency_stats(latencies_lpop)
+        print(
+            f"  LPOP   p50={lt['p50_ms']}ms  p99={lt['p99_ms']}ms  ({len(latencies_lpop)} ops)"
         )
     print()
     return rps
@@ -338,6 +395,7 @@ def main():
     r3 = bench_concurrent(workload="set")
     bench_concurrent(workload="mixed")
     r4 = bench_mixed_keyspace()
+    r5 = bench_list_operations()
 
     print(DIVIDER)
     print("Summary")
@@ -345,6 +403,7 @@ def main():
     print(f"  Pipelining (x{PIPELINE_SIZE})          :  {r2:>10,.0f} req/s")
     print(f"  {NUM_CLIENTS} concurrent clients (SET) :  {r3:>10,.0f} req/s")
     print(f"  Mixed keyspace           :  {r4:>10,.0f} req/s")
+    print(f"  List Operations (RPUSH/LPOP) :  {r5:>10,.0f} req/s")
     if r1 > 0:
         print(f"\n  Pipeline speedup  : {r2/r1:.1f}x")
         print(f"  Concurrency speedup: {r3/r1:.1f}x")
