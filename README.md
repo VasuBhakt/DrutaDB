@@ -8,7 +8,9 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **Custom RESP Parser:** Implements a state-machine-based parser for the **Redis Serialization Protocol (RESP)**. The parser safely processes incoming network byte streams, handling TCP packet fragmentation and partial reads natively.
 
-- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`) wrapped in a custom `RedisValue` struct to support multiple data types.
+- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`) wrapped in a custom `DrutaValue` struct to support polymorphic data types.
+
+- **O(1) LRU Eviction:** Implements a **Hash Map + Doubly Linked List** hybrid to track key recency. This architecture ensures that cache hits, updates, and evictions all occur in constant time, maintaining deterministic performance under high memory pressure.
 
 - **Connection Management:** Maintains an active socket watchlist with O(1) connection teardown using back-swapping, minimizing latency during client disconnects.
 
