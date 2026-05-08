@@ -1,5 +1,6 @@
 #include "aof.hpp"
 #include "commands.hpp"
+#include "lru.hpp"
 #include "parser_resp.hpp"
 #include "store.hpp"
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <iostream>
 #include <sstream>
 #include <string_view>
+#include <variant>
 
 namespace fs = std::filesystem;
 
@@ -136,13 +138,20 @@ void rewrite_aof() {
 
   long long current_time = get_current_time_ms();
 
-  for (const auto &[key, value] : kv_store) {
+  // Iterate from TAIL (Least Recent) to HEAD (Most Recent)
+  DrutaNode *cur = TAIL;
+  while (cur) {
+    const std::string &key = cur->key;
+    const DrutaValue &value = cur->value;
+    
     if (value.expiry_time > 0 && current_time > value.expiry_time) {
+      cur = cur->next;
       continue;
     }
 
     if (value.type == ValueType::STRING) {
-      std::vector<std::string> cmd = {"SET", key, value.data};
+      const std::string &str_data = std::get<std::string>(value.data);
+      std::vector<std::string> cmd = {"SET", key, str_data};
       if (value.expiry_time > 0) {
         cmd.push_back("PXAT"); // absolute time expiry
         cmd.push_back(std::to_string(value.expiry_time));
@@ -150,14 +159,16 @@ void rewrite_aof() {
       temp_aof << format_resp_command(cmd);
 
     } else if (value.type == ValueType::LIST) {
-      if (!value.list_data.empty()) {
+      const auto &list_data = std::get<std::deque<std::string>>(value.data);
+      if (!list_data.empty()) {
         std::vector<std::string> cmd = {"RPUSH", key};
-        for (const std::string &item : value.list_data) {
+        for (const std::string &item : list_data) {
           cmd.push_back(item);
         }
         temp_aof << format_resp_command(cmd);
       }
     }
+    cur = cur->next;
   }
 
   temp_aof.flush();
@@ -211,19 +222,17 @@ void check_and_rewrite_aof() {
 }
 
 void flush_clear_aof() {
-  if(aof_file.is_open()) {
+  if (aof_file.is_open()) {
     aof_file.close();
   }
   fs::path main_path = get_aof_path();
   aof_file.open(main_path, std::ios::out | std::ios::trunc);
   if (!aof_file.is_open()) {
-    std::cerr << "[AOF Error] Could not open file for flush."
-              << std::endl;
+    std::cerr << "[AOF Error] Could not open file for flush." << std::endl;
   }
   aof_file.close();
   aof_file.open(main_path, std::ios::app);
   if (!aof_file.is_open()) {
-    std::cerr << "[AOF Error] Could not open file for rewrite."
-              << std::endl;
+    std::cerr << "[AOF Error] Could not open file for rewrite." << std::endl;
   }
 }

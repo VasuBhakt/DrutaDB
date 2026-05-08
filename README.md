@@ -43,6 +43,16 @@ DrutaDB ensures data persistence using an **Append-Only File (AOF)**:
 - **Rewrite Trigger:** To optimize disk space, the server triggers a rewrite when the AOF exceeds 10KB and has doubled in size relative to the previous base.
 - **Crash Safety:** The rewrite process generates a temporary file and utilizes `std::filesystem::rename` for an atomic swap, ensuring that a crash during the rewrite never results in data loss or corruption.
 
+## 🧠 LRU Cache & Memory Management
+
+DrutaDB implements a memory-aware eviction policy designed for deterministic performance and strict memory bounds:
+
+- **$O(1)$ LRU Implementation**: Utilizes a dual-layered architecture combining a `std::map` for coordinate lookups and a custom Doubly Linked List for access tracking. This ensures that both cache hits (`touch`) and evictions occur in constant time.
+- **Physical Heap Accounting**: Rather than tracking object counts, DrutaDB calculates actual heap consumption. It accounts for `std::string` capacity, `std::deque` internal node pointers (`sizeof(void*)`), and the overhead of the `DrutaNode` structure.
+- **Incremental Memory Updates**: Memory deltas for complex types (like LIST) are calculated incrementally during mutation (`LPUSH`, `RPOP`). This avoids costly $O(N)$ full-container scans, maintaining high throughput for large collections.
+- **RAII-Based Ownership**: Employs `std::unique_ptr` for primary node ownership within the `kv_store`. The LRU list maintains non-owning observer pointers, ensuring safe, leak-free teardowns during rapid eviction cycles.
+- **Memory-Triggered Eviction**: Features a strict 64MB ceiling (configurable). When exceeded, the database executes a synchronous "evict-until-safe" loop, purging the least recently used entries until the heap returns within safe bounds.
+
 ## 🏎️ Performance & Benchmarking
 
 DrutaDB is optimized for high-throughput, low-latency workloads. Below are representative results from the internal benchmarking suite (`test/benchmark.py`):
