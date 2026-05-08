@@ -1,3 +1,3 @@
 #include "store.hpp"
 
-std::map<std::string, RedisValue> kv_store;
+std::map<std::string, DrutaValue> kv_store;
