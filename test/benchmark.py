@@ -24,7 +24,7 @@ HOST = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 6379
 
 TOTAL_REQUESTS = 10_000
-NUM_CLIENTS = 10
+NUM_CLIENTS = 20
 PIPELINE_SIZE = 50
 WARMUP_REQUESTS = 500
 KEY_SPACE = 5_000  # number of distinct keys
