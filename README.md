@@ -8,7 +8,9 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **Custom RESP Parser:** Implements a state-machine-based parser for the **Redis Serialization Protocol (RESP)**. The parser safely processes incoming network byte streams, handling TCP packet fragmentation and partial reads natively.
 
-- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`) wrapped in a custom `RedisValue` struct to support multiple data types.
+- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`) wrapped in a custom `DrutaValue` struct to support polymorphic data types.
+
+- **O(1) LRU Eviction:** Implements a **Hash Map + Doubly Linked List** hybrid to track key recency. This architecture ensures that cache hits, updates, and evictions all occur in constant time, maintaining deterministic performance under high memory pressure.
 
 - **Connection Management:** Maintains an active socket watchlist with O(1) connection teardown using back-swapping, minimizing latency during client disconnects.
 
@@ -33,6 +35,7 @@ DrutaDB currently supports a subset of standard commands over TCP port `6379`:
 - `RPOP <list_name> [count]` (Remove and return elements from tail)
 - `DEL <key1> <key2> ...` (Delete one or more keys)
 - `LLEN <list_name>` (Get list length)
+- `FLUSHDB --sure` (remove all keys from store, --sure flag is necessary to prevent accidental deletions)
 
 ## 💾 Persistence (AOF)
 
@@ -69,6 +72,9 @@ DrutaDB is optimized for high-throughput, low-latency workloads. Below are repre
 
 - **`everysec` AOF Policy:** Implements a time-buffered disk flush (every 1 second), maintaining a p99 tail latency of 0.31ms and sustained 10k+ req/s under concurrent load.
 - **TCP_NODELAY:** Disables Nagle's algorithm to eliminate the delayed-ACK penalty, enabling **4.8x higher throughput** for pipelined operations, compared to sequential baseline.
+
+> [!NOTE]
+> **Benchmark Environment:** Tests conducted on an **12th Gen Intel(R) Core(TM) i5-1235U** with peak throughput measured during Turbo Boost. Results may vary based on CPU thermal limits and background process interference.
 
 ## 🌍 Supported Environments
 
