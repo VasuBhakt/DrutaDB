@@ -144,12 +144,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) 
 
 ---
 
-## 🙏 Acknowledgments
-
-This project was built as a deep dive into **low-level systems engineering, specifically focusing on POSIX socket programming, TCP/IP networking, and I/O multiplexing.** A special thanks to the [CodeCrafters](https://codecrafters.io/) "Build Your Own Redis" challenge, which served as an excellent structural guide and testing environment during the initial development and learning phase of this database.
-
----
-
 ## 🤝 Contributing
 
 Contributions are welcome! Open issues or submit pull requests to improve the project! <br>
