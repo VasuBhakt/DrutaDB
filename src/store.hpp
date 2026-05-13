@@ -6,12 +6,13 @@
 #include <memory>
 #include <string>
 #include <variant>
+#include "drutahash.hpp"
 
-enum class ValueType { STRING, LIST };
+enum class ValueType { STRING, LIST, HASH };
 
 struct DrutaValue {
   ValueType type;
-  std::variant<std::string, std::deque<std::string>> data;
+  std::variant<std::string, std::deque<std::string>, DrutaHash> data;
   long long expiry_time;
   size_t memory_usage;
 
@@ -23,7 +24,7 @@ struct DrutaValue {
   // Constructor for STRING
   DrutaValue(std::string d, long long e = 0)
       : type(ValueType::STRING), data(std::move(d)), expiry_time(e) {
-    memory_usage = std::get<std::string>(data).capacity();
+    memory_usage = sizeof(std::string) + calc_string_usage(d);
   }
 
   // Constructor for LIST
@@ -32,7 +33,8 @@ struct DrutaValue {
     memory_usage = 0;
     const auto &list = std::get<std::deque<std::string>>(data);
     for (const auto &s : list) {
-      memory_usage += calc_string_usage(s) + sizeof(void *);
+      // We add 8 bytes for the deque's internal pointer tracking
+      memory_usage += calc_string_usage(s) + sizeof(std::string) + 8;
     }
   }
 
@@ -40,8 +42,10 @@ struct DrutaValue {
   explicit DrutaValue(ValueType t) : type(t), expiry_time(0), memory_usage(0) {
     if (type == ValueType::STRING)
       data = std::string("");
-    else
+    else if (type == ValueType::LIST)
       data = std::deque<std::string>{};
+    else if (type == ValueType::HASH)
+      data = DrutaHash(std::vector<std::pair<std::string, std::string>>{});
   }
 };
 

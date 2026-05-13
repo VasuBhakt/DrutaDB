@@ -63,10 +63,13 @@ bool command_set(int fd, std::vector<std::string> &args) {
       }
     }
     auto it = kv_store.find(key);
-    DrutaNode *existing = (it != kv_store.end()) ? it->second.get() : nullptr;
-    DrutaNode *node = update_lru(key, DrutaValue(val, expire_at), existing);
-    if (!existing) {
-      kv_store[key] = std::unique_ptr<DrutaNode>(node);
+    if (it != kv_store.end()) {
+      update_lru(it->second.get(), DrutaValue(val, expire_at));
+    } else {
+      auto new_node = std::make_unique<DrutaNode>(key, DrutaValue(val, expire_at));
+      DrutaNode *node = new_node.get();
+      kv_store[key] = std::move(new_node);
+      add_lru(node);
     }
     send(fd, "+OK\r\n", 5, 0);
     return true;
@@ -126,7 +129,7 @@ static bool generic_push(int fd, std::vector<std::string> &args,
           list.push_front(args[i]);
         else
           list.push_back(args[i]);
-        delta += DrutaValue::calc_string_usage(args[i]) + sizeof(void *);
+        delta += DrutaValue::calc_string_usage(args[i]) + sizeof(std::string) + 8;
       }
       node->value.memory_usage += delta;
       notify_memory_change(0, delta);
@@ -143,15 +146,15 @@ static bool generic_push(int fd, std::vector<std::string> &args,
         list.push_front(args[i]);
       else
         list.push_back(args[i]);
-      delta += DrutaValue::calc_string_usage(args[i]) + sizeof(void *);
+      delta += DrutaValue::calc_string_usage(args[i]) + sizeof(std::string) + 8;
     }
     data_list.memory_usage += delta;
     size_t list_size = list.size();
 
-    // The key doesn't exist, so notify_memory_change for the base size and
-    // initial list
-    DrutaNode *node = update_lru(key, std::move(data_list));
-    kv_store[key] = std::unique_ptr<DrutaNode>(node);
+    auto new_node = std::make_unique<DrutaNode>(key, std::move(data_list));
+    DrutaNode *node = new_node.get();
+    kv_store[key] = std::move(new_node);
+    add_lru(node);
     send_integer(fd, list_size);
     return true;
   }
@@ -258,7 +261,7 @@ static bool generic_pop(int fd, std::vector<std::string> &args,
       int actual_pop = count_pop;
       while (actual_pop) {
         std::string &val_ref = from_front ? list.front() : list.back();
-        size_t usage = DrutaValue::calc_string_usage(val_ref) + sizeof(void *);
+        size_t usage = DrutaValue::calc_string_usage(val_ref) + sizeof(std::string) + 8;
         delta += usage;
         std::string val = std::move(val_ref);
         if (from_front)
@@ -322,6 +325,182 @@ bool command_del(int fd, std::vector<std::string> &args) {
   return del_count > 0;
 }
 
+bool command_hset(int fd, std::vector<std::string> &args) {
+  if (args.size() < 4 || args.size() % 2 != 0) {
+    std::string err = "-ERR wrong number of arguments for 'hset' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return false;
+  }
+  std::string key = args[1];
+  auto it = kv_store.find(key);
+  DrutaHash *hash_ptr = nullptr;
+  DrutaNode *node = nullptr;
+
+  if (it != kv_store.end()) {
+    node = it->second.get();
+    if (node->value.type != ValueType::HASH) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    hash_ptr = &std::get<DrutaHash>(node->value.data);
+  } else {
+    DrutaValue val(ValueType::HASH);
+    auto new_node = std::make_unique<DrutaNode>(key, std::move(val));
+    node = new_node.get();
+    kv_store[key] = std::move(new_node);
+    add_lru(node);
+    hash_ptr = &std::get<DrutaHash>(node->value.data);
+  }
+
+  int created = 0;
+  size_t old_mem = hash_ptr->memory_usage;
+  for (size_t i = 2; i < args.size(); i += 2) {
+    if (hash_ptr->set(args[i], args[i + 1])) {
+      created++;
+    }
+  }
+  size_t new_mem = hash_ptr->memory_usage;
+  if (new_mem > old_mem) {
+    node->value.memory_usage += (new_mem - old_mem);
+  } else if (old_mem > new_mem) {
+    node->value.memory_usage -= (old_mem - new_mem);
+  }
+  notify_memory_change(old_mem, new_mem);
+
+  touch_lru(node);
+  send_integer(fd, created);
+  return true;
+}
+
+void command_hget(int fd, std::vector<std::string> &args) {
+  if (args.size() != 3) {
+    std::string err = "-ERR wrong number of arguments for 'hget' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::HASH) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return;
+    }
+    DrutaHash &hash = std::get<DrutaHash>(node->value.data);
+    std::string *val = hash.get(args[2]);
+    if (val) {
+      RespParser parser;
+      std::string res;
+      res.reserve(val->length() + 64);
+      parser.resp_bulk_string(res, *val);
+      send(fd, res.c_str(), res.size(), 0);
+      touch_lru(node);
+    } else {
+      send(fd, "$-1\r\n", 5, 0);
+    }
+  } else {
+    send(fd, "$-1\r\n", 5, 0);
+  }
+}
+
+void command_hgetall(int fd, std::vector<std::string> &args) {
+  if (args.size() != 2) {
+    std::string err = "-ERR wrong number of arguments for 'hgetall' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::HASH) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return;
+    }
+    DrutaHash &hash = std::get<DrutaHash>(node->value.data);
+    touch_lru(node);
+
+    std::vector<std::pair<std::string, std::string>> all_data;
+    if (hash.type == HashType::VECTOR) {
+      all_data = std::get<std::vector<std::pair<std::string, std::string>>>(hash.data);
+    } else {
+      auto &m = std::get<std::map<std::string, std::string>>(hash.data);
+      for (auto &p : m) all_data.push_back(p);
+    }
+    std::string res;
+    res.reserve(1024 + hash.memory_usage);
+    res+="*";
+    res+=std::to_string(all_data.size() * 2);
+    res+="\r\n";
+    RespParser parser;
+    for (auto &p : all_data) {
+      parser.resp_bulk_string(res, p.first);
+      parser.resp_bulk_string(res, p.second);
+    }
+    send(fd, res.c_str(), res.size(), 0);
+  } else {
+    send(fd, "*0\r\n", 4, 0);
+  }
+}
+
+bool command_hdel(int fd, std::vector<std::string> &args) {
+  if (args.size() < 3) {
+    std::string err = "-ERR wrong number of arguments for 'hdel' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return false;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::HASH) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    DrutaHash &hash = std::get<DrutaHash>(node->value.data);
+    int deleted = 0;
+    size_t old_mem = hash.memory_usage;
+    for (size_t i = 2; i < args.size(); i++) {
+      if (hash.del(args[i])) {
+        deleted++;
+      }
+    }
+    size_t new_mem = hash.memory_usage;
+    if (old_mem > new_mem) {
+        node->value.memory_usage -= (old_mem - new_mem);
+        notify_memory_change(old_mem, new_mem);
+    }
+    touch_lru(node);
+    send_integer(fd, deleted);
+    return deleted > 0;
+  } else {
+    send_integer(fd, 0);
+    return false;
+  }
+}
+
+void command_hlen(int fd, std::vector<std::string> &args) {
+  if (args.size() != 2) {
+    std::string err = "-ERR wrong number of arguments for 'hlen' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::HASH) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return;
+    }
+    DrutaHash &hash = std::get<DrutaHash>(node->value.data);
+    send_integer(fd, hash.size());
+  } else {
+    send_integer(fd, 0);
+  }
+}
+
 bool command_flushdb(int fd, std::vector<std::string> &args) {
   if (args.size() < 2 || args[1] != "--sure") {
     std::string err = "-ERR add --sure flag to flush db\r\n";
@@ -371,6 +550,16 @@ void handle_command(int fd, std::vector<std::string> &args) {
     success = command_del(fd, args);
   } else if (cmd == "LLEN" && args.size() == 2) {
     command_llen(fd, args);
+  } else if (cmd == "HSET" && args.size() >= 4) {
+    success = command_hset(fd, args);
+  } else if (cmd == "HGET" && args.size() == 3) {
+    command_hget(fd, args);
+  } else if (cmd == "HGETALL" && args.size() == 2) {
+    command_hgetall(fd, args);
+  } else if (cmd == "HDEL" && args.size() >= 3) {
+    success = command_hdel(fd, args);
+  } else if (cmd == "HLEN" && args.size() == 2) {
+    command_hlen(fd, args);
   } else if (cmd == "FLUSHDB") {
     success = command_flushdb(fd, args);
   } else if (cmd == "COMMAND") {

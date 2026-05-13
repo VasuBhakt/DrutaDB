@@ -38,32 +38,29 @@ static void attach_head(DrutaNode *node) {
   }
 }
 
-DrutaNode *update_lru(const std::string &key, DrutaValue value,
-                      DrutaNode *node) {
-  if (node) {
-    // Subtract old size before updating
-    current_memory_usage -= node->get_memory_usage();
-    node->value = std::move(value);
-    current_memory_usage += node->get_memory_usage();
+void add_lru(DrutaNode *node) {
+  if (!node) return;
 
-    if (node != HEAD) {
-      detach(node);
-      attach_head(node);
-    }
-  } else {
-    DrutaNode *new_node = new DrutaNode(key, std::move(value));
-    current_memory_usage += new_node->get_memory_usage();
-    attach_head(new_node);
-    lru_size++;
-    node = new_node;
-  }
+  // Add to global memory usage
+  current_memory_usage += node->get_memory_usage();
+  attach_head(node);
+  lru_size++;
 
   // Evict until we are under the memory limit
   while (current_memory_usage > LRU_MAX_MEMORY && TAIL) {
     evict_lru();
   }
+}
 
-  return node;
+void update_lru(DrutaNode *node, DrutaValue value) {
+  if (!node) return;
+
+  size_t old_size = node->get_memory_usage();
+  node->value = std::move(value);
+  size_t new_size = node->get_memory_usage();
+
+  notify_memory_change(old_size, new_size);
+  touch_lru(node);
 }
 
 void notify_memory_change(size_t old_size, size_t new_size) {
