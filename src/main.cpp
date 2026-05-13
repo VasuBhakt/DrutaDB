@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 
   // What server_addr does: It tells the OS where that socket should live (IP
   // and Port).
-  struct sockaddr_in server_addr{};
+  struct sockaddr_in server_addr = {0}; // Initialize everything (including padding) to zero
   server_addr.sin_family = AF_INET; // IPv4
   server_addr.sin_addr.s_addr =
       inet_addr("127.0.0.1");         // Listen on localhost only
@@ -80,11 +80,9 @@ int main(int argc, char **argv) {
   std::vector<struct pollfd> poll_fds;
 
   // 1. Add the server_fd to the watchlist first
-  // For new connections
-  struct pollfd server_pfd;
+  struct pollfd server_pfd = {0}; // Initialize all fields (including revents) to zero
   server_pfd.fd = server_fd;
-  server_pfd.events = POLLIN; // POLLIN means data is ready to be read; events
-                              // and revents are BITFIELDS
+  server_pfd.events = POLLIN; 
   poll_fds.push_back(server_pfd);
 
   std::map<int, RespParser> client_parsers;
@@ -102,14 +100,15 @@ int main(int argc, char **argv) {
       continue;
     }
     // 3. Loop through our watchlist to see who signaled us
+    //size_t current_size = poll_fds.size();
     for (size_t i = 0; i < poll_fds.size(); i++) {
       if (poll_fds[i].revents & POLLIN) { // does this fd have something new?
         if (poll_fds[i].fd == server_fd) {
           // EVENT :  New connection
-          struct sockaddr_in client_addr{};
+          struct sockaddr_in client_addr = {0};
           socklen_t client_addr_len = sizeof(client_addr);
           int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
-                                 (socklen_t *)&client_addr_len);
+                                 &client_addr_len);
           if (client_fd >= 0) {
             std::cout << "Client connected!\n";
             // Disable Nagle's algorithm to prevent delayed ACK
@@ -118,7 +117,7 @@ int main(int argc, char **argv) {
             setsockopt(client_fd, IPPROTO_TCP, TCP_NODELAY, &flag,
                        sizeof(flag));
             // add NEW client to watchlist
-            struct pollfd client_pfd;
+            struct pollfd client_pfd = {0};
             client_pfd.fd = client_fd;
             client_pfd.events = POLLIN;
             poll_fds.push_back(client_pfd);
@@ -137,6 +136,7 @@ int main(int argc, char **argv) {
             // this is ABSOLUTE GENIUS!
             poll_fds[i] = poll_fds.back();
             poll_fds.pop_back();
+            //current_size--;
             i--;
           } else {
             client_parsers[current_client_fd].parse_and_execute(
