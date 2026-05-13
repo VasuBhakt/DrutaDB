@@ -152,7 +152,7 @@ def warmup():
 
 
 def bench_single_client():
-    print(f"[1/5] Single-client sequential SET  ({TOTAL_REQUESTS:,} requests)")
+    print(f"[1/6] Single-client sequential SET  ({TOTAL_REQUESTS:,} requests)")
     s = make_connection()
     f = s.makefile("rb")
     cmd = encode_cmd("SET", "bench:single", "value")
@@ -179,7 +179,7 @@ def bench_single_client():
 
 
 def bench_pipeline():
-    print(f"[2/5] Pipelining  (pipeline={PIPELINE_SIZE}, total={TOTAL_REQUESTS:,})")
+    print(f"[2/6] Pipelining  (pipeline={PIPELINE_SIZE}, total={TOTAL_REQUESTS:,})")
     s = make_connection()
     f = s.makefile("rb")
     cmd = encode_cmd("SET", "bench:pipe", "value")
@@ -236,7 +236,7 @@ def bench_concurrent(workload: str = "set"):
     label = {"set": "SET only", "get": "GET only", "mixed": "80% GET / 20% SET"}[
         workload
     ]
-    print(f"[3/5] {NUM_CLIENTS} concurrent clients  –  {label}  ({rpc:,} req/client)")
+    print(f"[3/6] {NUM_CLIENTS} concurrent clients  –  {label}  ({rpc:,} req/client)")
 
     all_latencies = []
     t0 = time.perf_counter()
@@ -262,7 +262,7 @@ def bench_concurrent(workload: str = "set"):
 
 def bench_mixed_keyspace():
     print(
-        f"[4/5] Mixed workload  –  {KEY_SPACE:,}-key space  ({TOTAL_REQUESTS:,} requests)"
+        f"[4/6] Mixed workload  –  {KEY_SPACE:,}-key space  ({TOTAL_REQUESTS:,} requests)"
     )
     # Pre-populate with random keys so GETs can hit real data
     print(f"  Pre-populating {KEY_SPACE} keys...", end=" ", flush=True)
@@ -299,7 +299,19 @@ def bench_mixed_keyspace():
             s.sendall(cmd)
             recv_response(f)
             latencies_list.append(time.perf_counter() - ts)
-        else:  # 65% GET
+        elif r < 0.40:  # 5% HSET
+            cmd = encode_cmd("HSET", f"hash:{key}", "field", random_value())
+            ts = time.perf_counter()
+            s.sendall(cmd)
+            recv_response(f)
+            latencies_hash.append(time.perf_counter() - ts)
+        elif r < 0.45:  # 5% HGET
+            cmd = encode_cmd("HGET", f"hash:{key}", "field")
+            ts = time.perf_counter()
+            s.sendall(cmd)
+            recv_response(f)
+            latencies_hash.append(time.perf_counter() - ts)
+        else:  # 55% GET
             cmd = encode_cmd("GET", key)
             ts = time.perf_counter()
             s.sendall(cmd)
@@ -325,6 +337,11 @@ def bench_mixed_keyspace():
         print(
             f"  LIST p50={lt['p50_ms']}ms  p99={lt['p99_ms']}ms  ({len(latencies_list)} ops)"
         )
+    if latencies_hash:
+        ht = latency_stats(latencies_hash)
+        print(
+            f"  HASH p50={ht['p50_ms']}ms  p99={ht['p99_ms']}ms  ({len(latencies_hash)} ops)"
+        )
     print()
     return rps
 
@@ -333,7 +350,7 @@ def bench_mixed_keyspace():
 
 
 def bench_list_operations():
-    print(f"[5/5] List Operations  –  RPUSH and LPOP  ({TOTAL_REQUESTS:,} requests)")
+    print(f"[5/6] List Operations  –  RPUSH and LPOP  ({TOTAL_REQUESTS:,} requests)")
     s = make_connection()
     f = s.makefile("rb")
     list_key = "bench:list"
@@ -381,6 +398,60 @@ def bench_list_operations():
     return rps
 
 
+# ─── Benchmark 6: Hash Operations ─────────────────────────────────────────────
+
+
+def bench_hash_operations():
+    print(f"[6/6] Hash Operations  –  HSET and HGET  ({TOTAL_REQUESTS:,} requests)")
+    s = make_connection()
+    f = s.makefile("rb")
+    hash_key = "bench:hash"
+
+    # Cleanup if exists
+    s.sendall(encode_cmd("DEL", hash_key))
+    recv_response(f)
+
+    latencies_hset = []
+    latencies_hget = []
+
+    t0 = time.perf_counter()
+    # 1. Benchmark HSET
+    for i in range(TOTAL_REQUESTS // 2):
+        field = f"f:{i}"
+        cmd = encode_cmd("HSET", hash_key, field, random_value())
+        ts = time.perf_counter()
+        s.sendall(cmd)
+        recv_response(f)
+        latencies_hset.append(time.perf_counter() - ts)
+
+    # 2. Benchmark HGET
+    for i in range(TOTAL_REQUESTS // 2):
+        field = f"f:{i}"
+        cmd = encode_cmd("HGET", hash_key, field)
+        ts = time.perf_counter()
+        s.sendall(cmd)
+        recv_response(f)
+        latencies_hget.append(time.perf_counter() - ts)
+
+    total = time.perf_counter() - t0
+    s.close()
+
+    rps = TOTAL_REQUESTS / total
+    print(f"  Throughput  {rps:,.0f} req/s  |  total {total:.3f}s")
+    if latencies_hset:
+        st = latency_stats(latencies_hset)
+        print(
+            f"  HSET   p50={st['p50_ms']}ms  p99={st['p99_ms']}ms  ({len(latencies_hset)} ops)"
+        )
+    if latencies_hget:
+        lt = latency_stats(latencies_hget)
+        print(
+            f"  HGET   p50={lt['p50_ms']}ms  p99={lt['p99_ms']}ms  ({len(latencies_hget)} ops)"
+        )
+    print()
+    return rps
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -396,6 +467,7 @@ def main():
     bench_concurrent(workload="mixed")
     r4 = bench_mixed_keyspace()
     r5 = bench_list_operations()
+    r6 = bench_hash_operations()
 
     print(DIVIDER)
     print("Summary")
@@ -404,6 +476,7 @@ def main():
     print(f"  {NUM_CLIENTS} concurrent clients (SET) :  {r3:>10,.0f} req/s")
     print(f"  Mixed keyspace           :  {r4:>10,.0f} req/s")
     print(f"  List Operations (RPUSH/LPOP) :  {r5:>10,.0f} req/s")
+    print(f"  Hash Operations (HSET/HGET) :  {r6:>10,.0f} req/s")
     if r1 > 0:
         print(f"\n  Pipeline speedup  : {r2/r1:.1f}x")
         print(f"  Concurrency speedup: {r3/r1:.1f}x")

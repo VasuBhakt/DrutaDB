@@ -1,6 +1,6 @@
 #include "drutahash.hpp"
 
-std::string* DrutaHash::get(const std::string &field) {
+std::string* DrutaHash::get_hash(const std::string &field) {
     if (type == HashType::VECTOR) {
         auto &vec = std::get<std::vector<std::pair<std::string, std::string>>>(data);
         for (auto &p : vec) {
@@ -14,7 +14,7 @@ std::string* DrutaHash::get(const std::string &field) {
     return nullptr;
 }
 
-bool DrutaHash::set(const std::string &field, const std::string &value) {
+bool DrutaHash::set_hash(const std::string &field, const std::string &value) {
     if (type == HashType::VECTOR) {
         auto &vec = std::get<std::vector<std::pair<std::string, std::string>>>(data);
         for (auto &p : vec) {
@@ -47,7 +47,7 @@ bool DrutaHash::set(const std::string &field, const std::string &value) {
     }
 }
 
-bool DrutaHash::del(const std::string &field) {
+bool DrutaHash::del_hash(const std::string &field) {
     if (type == HashType::VECTOR) {
         auto &vec = std::get<std::vector<std::pair<std::string, std::string>>>(data);
         for (auto it = vec.begin(); it != vec.end(); ++it) {

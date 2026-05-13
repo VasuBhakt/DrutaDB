@@ -42,8 +42,9 @@ static const uintmax_t REWRITE_THRESHOLD = 10 * 1024;
 // implemented with atd:;array + binary_search
 bool is_valid(std::string_view cmd) {
   // Must be sorted alphabetically for binary_search to work!
-  static constexpr std::array<std::string_view, 6> cmds = {
-      "DEL", "LPOP", "LPUSH", "RPOP", "RPUSH", "SET"};
+  // Must be sorted alphabetically for binary_search to work!
+  static constexpr std::array<std::string_view, 8> cmds = {
+      "DEL", "HDEL", "HSET", "LPOP", "LPUSH", "RPOP", "RPUSH", "SET"};
 
   return std::binary_search(cmds.begin(), cmds.end(), cmd);
 }
@@ -164,6 +165,25 @@ void rewrite_aof() {
         std::vector<std::string> cmd = {"RPUSH", key};
         for (const std::string &item : list_data) {
           cmd.push_back(item);
+        }
+        temp_aof << format_resp_command(cmd);
+      }
+    } else if (value.type == ValueType::HASH) {
+      const auto &hash = std::get<DrutaHash>(value.data);
+      if (hash.size() > 0) {
+        std::vector<std::string> cmd = {"HSET", key};
+        if (hash.type == HashType::VECTOR) {
+          const auto &vec = std::get<std::vector<std::pair<std::string, std::string>>>(hash.data);
+          for (const auto &p : vec) {
+            cmd.push_back(p.first);
+            cmd.push_back(p.second);
+          }
+        } else {
+          const auto &m = std::get<std::map<std::string, std::string>>(hash.data);
+          for (const auto &p : m) {
+            cmd.push_back(p.first);
+            cmd.push_back(p.second);
+          }
         }
         temp_aof << format_resp_command(cmd);
       }

@@ -246,3 +246,29 @@ if [[ "$DEL_MISSING_RES" == *"-ERR"* ]]; then
 else
     echo "❌ DEL Missing Arguments Failed (Got: $DEL_MISSING_RES)"
 fi
+
+echo "--- HASH COMMAND TESTS ---"
+
+echo "Testing HSET (Hash Creation)..."
+HSET_RES=$(send_cmd "*4\r\n\$4\r\nHSET\r\n\$6\r\nmyhash\r\n\$2\r\nf1\r\n\$2\r\nv1\r\n")
+if [[ "$HSET_RES" == *":1"* ]]; then
+    echo "✅ HSET Successful"
+else
+    echo "❌ HSET Failed"
+fi
+
+echo "Testing HGET (Hash Retrieval)..."
+HGET_RES=$(send_cmd "*3\r\n\$4\r\nHGET\r\n\$6\r\nmyhash\r\n\$2\r\nf1\r\n")
+if [[ "$HGET_RES" == *"v1"* ]]; then
+    echo "✅ HGET Successful"
+else
+    echo "❌ HGET Failed"
+fi
+
+echo "Testing HGETALL..."
+HGETALL_RES=$(send_cmd "*2\r\n\$7\r\nHGETALL\r\n\$6\r\nmyhash\r\n")
+if [[ "$HGETALL_RES" == *"f1"* && "$HGETALL_RES" == *"v1"* ]]; then
+    echo "✅ HGETALL Successful"
+else
+    echo "❌ HGETALL Failed"
+fi
