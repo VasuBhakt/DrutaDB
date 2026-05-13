@@ -356,7 +356,7 @@ bool command_hset(int fd, std::vector<std::string> &args) {
   int created = 0;
   size_t old_mem = hash_ptr->memory_usage;
   for (size_t i = 2; i < args.size(); i += 2) {
-    if (hash_ptr->set(args[i], args[i + 1])) {
+    if (hash_ptr->set_hash(args[i], args[i + 1])) {
       created++;
     }
   }
@@ -388,7 +388,7 @@ void command_hget(int fd, std::vector<std::string> &args) {
       return;
     }
     DrutaHash &hash = std::get<DrutaHash>(node->value.data);
-    std::string *val = hash.get(args[2]);
+    std::string *val = hash.get_hash(args[2]);
     if (val) {
       RespParser parser;
       std::string res;
@@ -462,7 +462,7 @@ bool command_hdel(int fd, std::vector<std::string> &args) {
     int deleted = 0;
     size_t old_mem = hash.memory_usage;
     for (size_t i = 2; i < args.size(); i++) {
-      if (hash.del(args[i])) {
+      if (hash.del_hash(args[i])) {
         deleted++;
       }
     }

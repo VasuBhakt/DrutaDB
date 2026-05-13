@@ -42,9 +42,9 @@ struct DrutaHash {
         }
     }
 
-    std::string* get(const std::string &field);
-    bool set(const std::string &field, const std::string &value);
-    bool del(const std::string &field);
+    std::string* get_hash(const std::string &field);
+    bool set_hash(const std::string &field, const std::string &value);
+    bool del_hash(const std::string &field);
     size_t size() const;
     void convert_to_map();
 };
