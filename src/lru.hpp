@@ -5,7 +5,7 @@
 #include <cstddef>
 
 // Default max memory before eviction (Demo Mode: 100KB, Actual mode: 64 MB)
-static constexpr size_t LRU_MAX_MEMORY = 100 * 1024;
+static constexpr size_t LRU_MAX_MEMORY = 64 * 1024 * 1024;
 
 extern DrutaNode *HEAD;
 extern DrutaNode *TAIL;

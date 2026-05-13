@@ -1,41 +1,51 @@
 #!/bin/bash
 # DrutaDB LRU Eviction Demonstration
-# Limit is 100KB. We will push 4x 30KB keys.
-
-send_raw() {
-    echo -ne "$1" | nc -w 1 localhost 6379
-}
+# Limit is 100KB. Using 5 large keys (30KB each).
 
 echo "--- STARTING EVICTION DEMO ---"
 echo "Target: 100KB Memory Limit"
 echo ""
 
-# 30,000 character string (~30KB)
-DATA=$(printf 'A%.0s' {1..30000})
+# Generate a 30KB string robustly
+# head -c is very reliable for generating exact byte counts
+DATA=$(head -c 30000 < /dev/zero | tr '\0' 'A')
 
-for i in {1..4}; do
-    echo "Pusing 30KB key 'demo:$i'..."
-    send_raw "*3\r\n\$3\r\nSET\r\n\$6\r\ndemo:$i\r\n\$30000\r\n$DATA\r\n" > /dev/null
-    sleep 0.5
+echo "Sending 5 keys (30KB each)..."
+for i in {1..5}; do
+    KEY="large:$i"
+    KLEN=${#KEY}
+    
+    # Send via a single pipe to nc
+    printf "*3\r\n\$3\r\nSET\r\n\$${KLEN}\r\n${KEY}\r\n\$30000\r\n${DATA}\r\n" | nc -N localhost 6379 > /dev/null
+    
+    echo "  Sent key '$KEY' (30KB)"
+    
+    # Check stats after every push so we can see it grow
+    printf "*1\r\n\$8\r\nMEMSTATS\r\n" | nc -N -w 1 localhost 6379 | grep "Usage"
 done
 
 echo ""
-echo "Checking results..."
+echo "Waiting for server to finalize memory cleanup..."
+# Send a dummy PING to trigger any pending eviction, then check
+printf "*1\r\n\$4\r\nPING\r\n" | nc -N -w 1 localhost 6379 > /dev/null
+sleep 0.5
 
-# Key 1 should be gone
-CHECK_1=$(send_raw "*2\r\n\$3\r\nGET\r\n\$6\r\ndemo:1\r\n")
-if [[ "$CHECK_1" == *"$-1"* ]]; then
-    echo "✅ SUCCESS: 'demo:1' was evicted (LRU working!)"
+echo "Checking eviction results..."
+
+# Key 1 and 2 should be gone (30KB * 5 = 150KB, which is 50KB over the limit)
+CHECK_1=$(printf "*2\r\n\$3\r\nGET\r\n\$7\r\nlarge:1\r\n" | nc -N -w 1 localhost 6379)
+if [[ "$CHECK_1" == *'$-1'* ]]; then
+    echo "✅ SUCCESS: 'large:1' was evicted correctly!"
 else
-    echo "❌ FAILURE: 'demo:1' is still there. Current memory calculation might be off."
+    echo "❌ FAILURE: 'large:1' is still there. Eviction didn't trigger."
 fi
 
-# Key 4 should definitely be there
-CHECK_4=$(send_raw "*2\r\n\$3\r\nGET\r\n\$6\r\ndemo:4\r\n")
-if [[ "$CHECK_4" == *"A"* ]]; then
-    echo "✅ SUCCESS: 'demo:4' (most recent) is still present."
+# Key 5 should definitely be there
+CHECK_5=$(printf "*2\r\n\$3\r\nGET\r\n\$7\r\nlarge:5\r\n" | nc -N -w 1 localhost 6379)
+if [[ "$CHECK_5" == *'A'* ]]; then
+    echo "✅ SUCCESS: 'large:5' (most recent) is still present."
 else
-    echo "❌ FAILURE: 'demo:4' was evicted unexpectedly."
+    echo "❌ FAILURE: 'large:5' was evicted unexpectedly."
 fi
 
 echo ""

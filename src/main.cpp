@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
 
   // What server_addr does: It tells the OS where that socket should live (IP
   // and Port).
-  struct sockaddr_in server_addr;
+  struct sockaddr_in server_addr{};
   server_addr.sin_family = AF_INET; // IPv4
   server_addr.sin_addr.s_addr =
       inet_addr("127.0.0.1");         // Listen on localhost only
@@ -106,8 +106,8 @@ int main(int argc, char **argv) {
       if (poll_fds[i].revents & POLLIN) { // does this fd have something new?
         if (poll_fds[i].fd == server_fd) {
           // EVENT :  New connection
-          struct sockaddr_in client_addr;
-          int client_addr_len = sizeof(client_addr);
+          struct sockaddr_in client_addr{};
+          socklen_t client_addr_len = sizeof(client_addr);
           int client_fd = accept(server_fd, (struct sockaddr *)&client_addr,
                                  (socklen_t *)&client_addr_len);
           if (client_fd >= 0) {

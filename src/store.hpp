@@ -3,6 +3,7 @@
 
 #include <deque>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <variant>
@@ -12,7 +13,9 @@ enum class ValueType { STRING, LIST, HASH, SET };
 
 struct DrutaValue {
   ValueType type;
-  std::variant<std::string, std::deque<std::string>, DrutaHash> data;
+  std::variant<std::string, std::deque<std::string>, DrutaHash,
+               std::set<std::string>>
+      data;
   long long expiry_time;
   size_t memory_usage;
 
@@ -23,29 +26,36 @@ struct DrutaValue {
 
   // Constructor for STRING
   DrutaValue(std::string d, long long e = 0)
-      : type(ValueType::STRING), data(std::move(d)), expiry_time(e) {
+      : type(ValueType::STRING), expiry_time(e) {
     memory_usage = sizeof(std::string) + calc_string_usage(d);
+    data = std::move(d);
   }
 
   // Constructor for LIST
   DrutaValue(std::deque<std::string> l, long long e = 0)
-      : type(ValueType::LIST), data(std::move(l)), expiry_time(e) {
+      : type(ValueType::LIST), expiry_time(e) {
     memory_usage = 0;
-    const auto &list = std::get<std::deque<std::string>>(data);
-    for (const auto &s : list) {
-      // We add 8 bytes for the deque's internal pointer tracking
+    for (const auto &s : l) {
       memory_usage += calc_string_usage(s) + sizeof(std::string) + sizeof(void*);
     }
+    data = std::move(l);
+  }
+
+  // Constructor for HASH
+  DrutaValue(DrutaHash h, long long e = 0)
+      : type(ValueType::HASH), expiry_time(e) {
+    memory_usage = h.memory_usage;
+    data = std::move(h);
   }
 
   // Constructor for SET
   DrutaValue(std::set<std::string> s, long long e = 0)
-      : type(ValueType::SET), data(std::move(s)), expiry_time(e) {
+      : type(ValueType::SET), expiry_time(e) {
     memory_usage = 0;
-    const auto &set = std::get<std::set<std::string>>(data);
-    for (const auto &str : set) {
+    for (const auto &str : s) {
       memory_usage += str.capacity() + sizeof(std::string) + 8*(sizeof(void*)); // hash entry overhead
     }
+    data = std::move(s);
   }
 
   // Explicit constructor for creating empty types

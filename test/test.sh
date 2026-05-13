@@ -1,6 +1,8 @@
 #!/bin/bash
 # DrutaDB Test Suite
 
+# sed -i 's/\r$//' eviction_test.sh
+
 send_cmd() {
     # Use printf for more reliable CRLF handling in WSL
     printf "$1" | nc -w 1 localhost 6379

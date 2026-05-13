@@ -1,8 +1,14 @@
 #include "commands.hpp"
 #include "aof.hpp"
+#include "drutahash.hpp"
 #include "lru.hpp"
 #include "parser_resp.hpp"
 #include "store.hpp"
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+
+extern size_t current_memory_usage;
 #include <algorithm>
 #include <chrono>
 #include <string>
@@ -366,6 +372,7 @@ bool command_hset(int fd, std::vector<std::string> &args) {
   } else if (old_mem > new_mem) {
     node->value.memory_usage -= (old_mem - new_mem);
   }
+
   notify_memory_change(old_mem, new_mem);
 
   touch_lru(node);
@@ -556,7 +563,7 @@ void command_sismember(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return ;
     }
     auto &set = std::get<std::set<std::string>>(node->value.data);
     send_integer(fd, set.count(args[2]));
@@ -577,7 +584,7 @@ void command_smismember(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return;
     }
     auto &set = std::get<std::set<std::string>>(node->value.data);
     int present = 0;
@@ -604,7 +611,7 @@ void command_scard(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return;
     }
     auto &set = std::get<std::set<std::string>>(node->value.data);
     send_integer(fd, set.size());
@@ -625,16 +632,16 @@ void command_smembers(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return;
     }
     auto &set = std::get<std::set<std::string>>(node->value.data);
     std::string res; 
-    res.reserve(1024 + set.memory_usage);
+    res.reserve(1024 + node->value.memory_usage);
     res += "*";
     res += std::to_string(set.size());
     res += "\r\n";
     RespParser parser;
-    for (std::string &s: set) {
+    for (const std::string &s: set) {
       parser.resp_bulk_string(res, s);
     } 
     send(fd, res.c_str(), res.size(), 0);
@@ -644,7 +651,7 @@ void command_smembers(int fd, std::vector<std::string> &args) {
 }
 
 void command_sdiff(int fd, std::vector<std::string> &args) {
-  if (args.size() < 3) {
+  if (args.size() < 2) {
     std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
     send(fd, err.c_str(), err.size(), 0);
     return;
@@ -656,7 +663,7 @@ void command_sdiff(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return;
     }
     diff_set = std::get<std::set<std::string>>(node->value.data); 
   } 
@@ -668,7 +675,7 @@ void command_sdiff(int fd, std::vector<std::string> &args) {
         continue;
       }
       auto &set = std::get<std::set<std::string>>(node->value.data);
-      for (std::string &s: set) {
+      for (const std::string &s: set) {
         if (diff_set.count(s)) {
           diff_set.erase(s);
         }
@@ -677,7 +684,7 @@ void command_sdiff(int fd, std::vector<std::string> &args) {
   }
   std::string res;
   size_t estimated_size = 0;
-  for (std::string &s : diff_set) {
+  for (const std::string &s : diff_set) {
     estimated_size += s.size();
   }
   res.reserve(16 + estimated_size);
@@ -685,14 +692,14 @@ void command_sdiff(int fd, std::vector<std::string> &args) {
   res += std::to_string(diff_set.size());
   res += "\r\n";
   RespParser parser;
-  for(std::string &s: diff_set) {
+  for(const std::string &s: diff_set) {
     parser.resp_bulk_string(res,s);
   }
   send(fd, res.c_str(), res.size(), 0);
 }
 
 void command_sinter(int fd, std::vector<std::string> &args) {
-  if (args.size() < 3) {
+  if (args.size() < 2) {
     std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
     send(fd, err.c_str(), err.size(), 0);
     return;
@@ -704,7 +711,7 @@ void command_sinter(int fd, std::vector<std::string> &args) {
     if (node->value.type != ValueType::SET) {
       std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
       send(fd, err.c_str(), err.size(), 0);
-      return false;
+      return;
     }
     inter_set = std::get<std::set<std::string>>(node->value.data); 
   } 
@@ -731,7 +738,7 @@ void command_sinter(int fd, std::vector<std::string> &args) {
   }
   std::string res;
   size_t estimated_size = 0;
-  for (std::string &s : inter_set) {
+  for (const std::string &s : inter_set) {
     estimated_size += s.size();
   }
   res.reserve(16 + estimated_size);
@@ -739,14 +746,14 @@ void command_sinter(int fd, std::vector<std::string> &args) {
   res += std::to_string(inter_set.size());
   res += "\r\n";
   RespParser parser;
-  for(std::string &s: inter_set) {
+  for(const std::string &s: inter_set) {
     parser.resp_bulk_string(res,s);
   }
   send(fd, res.c_str(), res.size(), 0);
 }
 
 void command_sunion(int fd, std::vector<std::string> &args) {
-  if (args.size() < 3) {
+  if (args.size() < 2) {
     std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
     send(fd, err.c_str(), err.size(), 0);
     return;
@@ -760,14 +767,14 @@ void command_sunion(int fd, std::vector<std::string> &args) {
         continue;
       }
       auto &set = std::get<std::set<std::string>>(node->value.data);
-      for (std::string &s: set) {
+      for (const std::string &s: set) {
         union_set.insert(s);
       }
     } 
   }
   std::string res;
   size_t estimated_size = 0;
-  for (std::string &s : union_set) {
+  for (const std::string &s : union_set) {
     estimated_size += s.size();
   }
   res.reserve(16 + estimated_size);
@@ -775,7 +782,7 @@ void command_sunion(int fd, std::vector<std::string> &args) {
   res += std::to_string(union_set.size());
   res += "\r\n";
   RespParser parser;
-  for(std::string &s: union_set) {
+  for(const std::string &s: union_set) {
     parser.resp_bulk_string(res,s);
   }
   send(fd, res.c_str(), res.size(), 0);
@@ -834,6 +841,13 @@ bool command_flushdb(int fd, std::vector<std::string> &args) {
   }
 }
 
+void command_memstats(int fd) {
+  std::stringstream ss;
+  ss << "+Memory Usage: " << current_memory_usage << " bytes\r\n" << " "<<"+Memory Limit: " << LRU_MAX_MEMORY << " bytes\r\n";
+  std::string res = ss.str();
+  send(fd, res.c_str(), res.size(), 0);
+}
+
 void handle_command(int fd, std::vector<std::string> &args) {
 
   std::string cmd = args[0];
@@ -883,14 +897,16 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_smembers(fd, args);
   } else if (cmd == "SMISMEMBER" && args.size() >= 3) {
     command_smismember(fd, args);
-  } else if (cmd == "SINTER" && args.size() >= 3) {
+  } else if (cmd == "SINTER" && args.size() >= 2) {
     command_sinter(fd, args);
-  } else if (cmd == "SUNION" && args.size() >= 3) {
+  } else if (cmd == "SUNION" && args.size() >= 2) {
     command_sunion(fd, args);
-  } else if (cmd == "SDIFF" && args.size() >= 3) {
+  } else if (cmd == "SDIFF" && args.size() >= 2) {
     command_sdiff(fd, args);
   } else if (cmd == "SDEL" && args.size() >= 3) {
     success = command_sdel(fd, args);
+  } else if (cmd == "MEMSTATS") {
+    command_memstats(fd);
   } else if (cmd == "FLUSHDB") {
     success = command_flushdb(fd, args);
   } else if (cmd == "COMMAND") {
