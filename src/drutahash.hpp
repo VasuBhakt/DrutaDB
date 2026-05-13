@@ -13,7 +13,7 @@ enum class HashType {
 };
 
 // Precise overhead estimations for memory tracking
-static constexpr size_t MAP_NODE_OVERHEAD = 4 * sizeof(void*); // 3 pointers + color/padding
+static constexpr size_t MAP_NODE_OVERHEAD = 8 * sizeof(void*); // 3 ptrs + color + malloc header
 static constexpr size_t STRING_OBJ_OVERHEAD = sizeof(std::string);
 static constexpr size_t HASH_ENTRY_OVERHEAD_MAP = (STRING_OBJ_OVERHEAD * 2) + MAP_NODE_OVERHEAD;
 static constexpr size_t HASH_ENTRY_OVERHEAD_VECTOR = (STRING_OBJ_OVERHEAD * 2);

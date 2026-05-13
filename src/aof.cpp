@@ -42,9 +42,8 @@ static const uintmax_t REWRITE_THRESHOLD = 10 * 1024;
 // implemented with atd:;array + binary_search
 bool is_valid(std::string_view cmd) {
   // Must be sorted alphabetically for binary_search to work!
-  // Must be sorted alphabetically for binary_search to work!
-  static constexpr std::array<std::string_view, 8> cmds = {
-      "DEL", "HDEL", "HSET", "LPOP", "LPUSH", "RPOP", "RPUSH", "SET"};
+  static constexpr std::array<std::string_view, 10> cmds = {
+      "DEL", "HDEL", "HSET", "LPOP", "LPUSH", "RPOP", "RPUSH", "SADD", "SDEL", "SET"};
 
   return std::binary_search(cmds.begin(), cmds.end(), cmd);
 }
@@ -184,6 +183,16 @@ void rewrite_aof() {
             cmd.push_back(p.first);
             cmd.push_back(p.second);
           }
+        }
+        temp_aof << format_resp_command(cmd);
+      }
+    } else if (value.type == ValueType::SET) {
+      const auto &set_data = std::get<std::set<std::string>>(value.data);
+      if (!set_data.empty()) {
+        std::vector<std::string> cmd = {"SADD", key};
+        cmd.reserve(set_data.size() + 2);
+        for (const std::string &item : set_data) {
+          cmd.push_back(item);
         }
         temp_aof << format_resp_command(cmd);
       }

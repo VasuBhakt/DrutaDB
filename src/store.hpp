@@ -8,7 +8,7 @@
 #include <variant>
 #include "drutahash.hpp"
 
-enum class ValueType { STRING, LIST, HASH };
+enum class ValueType { STRING, LIST, HASH, SET };
 
 struct DrutaValue {
   ValueType type;
@@ -34,7 +34,17 @@ struct DrutaValue {
     const auto &list = std::get<std::deque<std::string>>(data);
     for (const auto &s : list) {
       // We add 8 bytes for the deque's internal pointer tracking
-      memory_usage += calc_string_usage(s) + sizeof(std::string) + 8;
+      memory_usage += calc_string_usage(s) + sizeof(std::string) + sizeof(void*);
+    }
+  }
+
+  // Constructor for SET
+  DrutaValue(std::set<std::string> s, long long e = 0)
+      : type(ValueType::SET), data(std::move(s)), expiry_time(e) {
+    memory_usage = 0;
+    const auto &set = std::get<std::set<std::string>>(data);
+    for (const auto &str : set) {
+      memory_usage += str.capacity() + sizeof(std::string) + 8*(sizeof(void*)); // hash entry overhead
     }
   }
 
@@ -46,6 +56,8 @@ struct DrutaValue {
       data = std::deque<std::string>{};
     else if (type == ValueType::HASH)
       data = DrutaHash(std::vector<std::pair<std::string, std::string>>{});
+    else if (type == ValueType::SET)
+      data = std::set<std::string>{};
   }
 };
 

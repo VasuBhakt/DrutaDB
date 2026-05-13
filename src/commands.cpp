@@ -370,7 +370,7 @@ bool command_hset(int fd, std::vector<std::string> &args) {
 
   touch_lru(node);
   send_integer(fd, created);
-  return true;
+  return created > 0;
 }
 
 void command_hget(int fd, std::vector<std::string> &args) {
@@ -501,6 +501,319 @@ void command_hlen(int fd, std::vector<std::string> &args) {
   }
 }
 
+bool command_sadd(int fd, std::vector<std::string> &args) {
+  std::string key = args[1];
+  auto it = kv_store.find(key);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    int created = 0;
+    int delta = 0;
+    for (size_t i = 2; i < args.size(); i++) {
+      if (set.insert(args[i]).second) {
+        delta += args[i].capacity() + sizeof(std::string) + 8 * sizeof(void*);
+        created++;
+      }
+    }
+    node->value.memory_usage += delta;
+    notify_memory_change(0, delta);
+    touch_lru(node);
+    send_integer(fd, created);
+    return created > 0;
+  } else {
+    DrutaValue val(ValueType::SET);
+    auto &set = std::get<std::set<std::string>>(val.data);
+    int created = 0;
+    for (size_t i = 2; i < args.size(); i++) {
+      if (set.insert(args[i]).second) {
+        val.memory_usage += args[i].capacity() + sizeof(std::string) + 8 * sizeof(void*);
+        created++;
+      }
+    }
+    auto new_node = std::make_unique<DrutaNode>(key, std::move(val));
+    DrutaNode *ptr = new_node.get();
+    kv_store[key] = std::move(new_node);
+    add_lru(ptr);
+    send_integer(fd, created);
+    return created > 0;
+  }
+}
+
+void command_sismember(int fd, std::vector<std::string> &args) {
+  if (args.size() != 3) {
+    std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    send_integer(fd, set.count(args[2]));
+  } else {
+    send_integer(fd, 0);
+  }
+}
+
+void command_smismember(int fd, std::vector<std::string> &args) {
+  if (args.size() < 3) {
+    std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    int present = 0;
+    for (size_t i = 2; i < args.size(); i++) {
+      if (set.count(args[i])) {
+        present++;
+      }
+    }
+    send_integer(fd, present); 
+  } else {
+    send_integer(fd, 0);
+  }
+}
+
+void command_scard(int fd, std::vector<std::string> &args) {
+  if (args.size() != 2) {
+    std::string err = "-ERR wrong number of arguments for 'scard' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    send_integer(fd, set.size());
+  } else {
+    send_integer(fd, 0);
+  }
+}
+
+void command_smembers(int fd, std::vector<std::string> &args) {
+  if (args.size() != 2) {
+    std::string err = "-ERR wrong number of arguments for 'smembers' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    std::string res; 
+    res.reserve(1024 + set.memory_usage);
+    res += "*";
+    res += std::to_string(set.size());
+    res += "\r\n";
+    RespParser parser;
+    for (std::string &s: set) {
+      parser.resp_bulk_string(res, s);
+    } 
+    send(fd, res.c_str(), res.size(), 0);
+  } else {
+    send(fd, "*0\r\n", 4, 0);
+  }
+}
+
+void command_sdiff(int fd, std::vector<std::string> &args) {
+  if (args.size() < 3) {
+    std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  std::set<std::string> diff_set;
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    diff_set = std::get<std::set<std::string>>(node->value.data); 
+  } 
+  for(size_t i=2;i<args.size();i++) {
+    auto it = kv_store.find(args[i]);
+    if (it != kv_store.end()) {
+      DrutaNode *node = it->second.get();
+      if (node->value.type != ValueType::SET) {
+        continue;
+      }
+      auto &set = std::get<std::set<std::string>>(node->value.data);
+      for (std::string &s: set) {
+        if (diff_set.count(s)) {
+          diff_set.erase(s);
+        }
+      }
+    } 
+  }
+  std::string res;
+  size_t estimated_size = 0;
+  for (std::string &s : diff_set) {
+    estimated_size += s.size();
+  }
+  res.reserve(16 + estimated_size);
+  res += "*";
+  res += std::to_string(diff_set.size());
+  res += "\r\n";
+  RespParser parser;
+  for(std::string &s: diff_set) {
+    parser.resp_bulk_string(res,s);
+  }
+  send(fd, res.c_str(), res.size(), 0);
+}
+
+void command_sinter(int fd, std::vector<std::string> &args) {
+  if (args.size() < 3) {
+    std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  auto it = kv_store.find(args[1]);
+  std::set<std::string> inter_set;
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    inter_set = std::get<std::set<std::string>>(node->value.data); 
+  } 
+  for (size_t i = 2; i < args.size(); i++) {
+    auto it_other = kv_store.find(args[i]);
+    if (it_other == kv_store.end()) {
+      inter_set.clear();
+      break;
+    }
+    DrutaNode *node_other = it_other->second.get();
+    if (node_other->value.type != ValueType::SET) {
+      continue;
+    }
+    auto &set_other = std::get<std::set<std::string>>(node_other->value.data);
+    
+    std::set<std::string> next_inter;
+    for (const std::string &s : inter_set) {
+      if (set_other.count(s)) {
+        next_inter.insert(s);
+      }
+    }
+    inter_set = std::move(next_inter);
+    if (inter_set.empty()) break;
+  }
+  std::string res;
+  size_t estimated_size = 0;
+  for (std::string &s : inter_set) {
+    estimated_size += s.size();
+  }
+  res.reserve(16 + estimated_size);
+  res += "*";
+  res += std::to_string(inter_set.size());
+  res += "\r\n";
+  RespParser parser;
+  for(std::string &s: inter_set) {
+    parser.resp_bulk_string(res,s);
+  }
+  send(fd, res.c_str(), res.size(), 0);
+}
+
+void command_sunion(int fd, std::vector<std::string> &args) {
+  if (args.size() < 3) {
+    std::string err = "-ERR wrong number of arguments for 'sismember' command\r\n";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
+  std::set<std::string> union_set;
+  for(size_t i=1;i<args.size();i++) {
+    auto it = kv_store.find(args[i]);
+    if (it != kv_store.end()) {
+      DrutaNode *node = it->second.get();
+      if (node->value.type != ValueType::SET) {
+        continue;
+      }
+      auto &set = std::get<std::set<std::string>>(node->value.data);
+      for (std::string &s: set) {
+        union_set.insert(s);
+      }
+    } 
+  }
+  std::string res;
+  size_t estimated_size = 0;
+  for (std::string &s : union_set) {
+    estimated_size += s.size();
+  }
+  res.reserve(16 + estimated_size);
+  res += "*";
+  res += std::to_string(union_set.size());
+  res += "\r\n";
+  RespParser parser;
+  for(std::string &s: union_set) {
+    parser.resp_bulk_string(res,s);
+  }
+  send(fd, res.c_str(), res.size(), 0);
+}
+
+bool command_sdel(int fd, std::vector<std::string> &args) {
+  std::string key = args[1];
+  auto it = kv_store.find(key);
+  if (it != kv_store.end()) {
+    DrutaNode *node = it->second.get();
+    if (node->value.type != ValueType::SET) {
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return false;
+    }
+    auto &set = std::get<std::set<std::string>>(node->value.data);
+    int deleted = 0, delta = 0;
+    for (size_t i = 2; i < args.size(); i++) {
+      auto it_erase = set.find(args[i]);
+      if (it_erase != set.end()) {
+        delta += (it_erase->capacity() + sizeof(std::string) + 8 * sizeof(void*));
+        set.erase(it_erase);
+        deleted++;
+      }
+    }
+    node->value.memory_usage -= delta;
+    notify_memory_change(delta, 0);
+    touch_lru(node);
+    send_integer(fd, deleted);
+    return deleted > 0;
+  } else {
+    std::string err = "-ERR no such key";
+    send(fd, err.c_str(), err.size(), 0);
+    return false;
+  }
+}
+
+
 bool command_flushdb(int fd, std::vector<std::string> &args) {
   if (args.size() < 2 || args[1] != "--sure") {
     std::string err = "-ERR add --sure flag to flush db\r\n";
@@ -560,6 +873,24 @@ void handle_command(int fd, std::vector<std::string> &args) {
     success = command_hdel(fd, args);
   } else if (cmd == "HLEN" && args.size() == 2) {
     command_hlen(fd, args);
+  } else if (cmd == "SADD" && args.size() >= 3) {
+    success = command_sadd(fd, args);
+  } else if (cmd == "SCARD" && args.size() == 2) {
+    command_scard(fd, args);
+  } else if (cmd == "SISMEMBER" && args.size() == 3) {
+    command_sismember(fd, args);
+  } else if (cmd == "SMEMBERS" && args.size() == 2) {
+    command_smembers(fd, args);
+  } else if (cmd == "SMISMEMBER" && args.size() >= 3) {
+    command_smismember(fd, args);
+  } else if (cmd == "SINTER" && args.size() >= 3) {
+    command_sinter(fd, args);
+  } else if (cmd == "SUNION" && args.size() >= 3) {
+    command_sunion(fd, args);
+  } else if (cmd == "SDIFF" && args.size() >= 3) {
+    command_sdiff(fd, args);
+  } else if (cmd == "SDEL" && args.size() >= 3) {
+    success = command_sdel(fd, args);
   } else if (cmd == "FLUSHDB") {
     success = command_flushdb(fd, args);
   } else if (cmd == "COMMAND") {
