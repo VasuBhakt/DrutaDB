@@ -24,7 +24,7 @@ HOST = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 6379
 
 TOTAL_REQUESTS = 10_000
-NUM_CLIENTS = 20
+NUM_CLIENTS = 50
 PIPELINE_SIZE = 50
 WARMUP_REQUESTS = 500
 KEY_SPACE = 5_000  # number of distinct keys
@@ -217,7 +217,7 @@ def _worker(requests_per_client: int, workload: str) -> list[float]:
         elif workload == "get":
             cmd = encode_cmd("GET", key)
         else:  # mixed 80/20 read-write
-            if random.random() < 0.2:
+            if random.random() < 0.4:
                 cmd = encode_cmd("SET", key, random_value())
             else:
                 cmd = encode_cmd("GET", key)
@@ -233,7 +233,7 @@ def _worker(requests_per_client: int, workload: str) -> list[float]:
 
 def bench_concurrent(workload: str = "set"):
     rpc = TOTAL_REQUESTS // NUM_CLIENTS
-    label = {"set": "SET only", "get": "GET only", "mixed": "80% GET / 20% SET"}[
+    label = {"set": "SET only", "get": "GET only", "mixed": "60% GET / 40% SET"}[
         workload
     ]
     print(f"[3/6] {NUM_CLIENTS} concurrent clients  –  {label}  ({rpc:,} req/client)")
@@ -276,6 +276,7 @@ def bench_mixed_keyspace():
     latencies_set = []
     latencies_get = []
     latencies_list = []
+    latencies_hash = []
 
     t0 = time.perf_counter()
     for _ in range(TOTAL_REQUESTS):
