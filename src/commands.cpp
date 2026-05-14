@@ -4,6 +4,7 @@
 #include "lru.hpp"
 #include "parser_resp.hpp"
 #include "store.hpp"
+#include "pubsub.hpp"
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -857,11 +858,32 @@ void command_memstats(int fd) {
   send(fd, res.c_str(), res.size(), 0);
 }
 
+void command_subscribe(int fd, std::vector<std::string> &args) {
+  pubsub_subscribe(fd, args);
+}
+
+void command_unsubscribe(int fd, std::vector<std::string> &args) {
+  pubsub_unsubscribe(fd, args);
+}
+
+void command_publish(int fd, std::vector<std::string> &args) {
+  int clients_affected = pubsub_publish(fd, args); 
+  send_integer(fd, clients_affected);
+}
+
 void handle_command(int fd, std::vector<std::string> &args) {
 
   std::string cmd = args[0];
   for (char &c : cmd)
     c = toupper((unsigned char)c);
+  
+  bool is_subscriber = clients_map[fd].is_subscriber;
+
+  if (is_subscriber && cmd!="PING" && cmd!="SUBSCRIBE" && cmd!="UNSUBSCRIBE") {
+    std::string err = "-ERR clients in pub/sub mode can only subscribe/unsubscribe/ping";
+    send(fd, err.c_str(), err.size(), 0);
+    return;
+  }
 
   bool success = false;
   if (cmd == "PING") {
@@ -918,6 +940,12 @@ void handle_command(int fd, std::vector<std::string> &args) {
     command_memstats(fd);
   } else if (cmd == "FLUSHDB") {
     success = command_flushdb(fd, args);
+  } else if (cmd == "SUBSCRIBE" && args.size() >= 2) {
+    command_subscribe(fd, args);
+  } else if (cmd == "UNSUBSCRIBE" && args.size() >= 2) {
+    command_unsubscribe(fd, args);
+  } else if (cmd == "PUBLISH" && args.size() == 3) {
+    command_publish(fd, args);
   } else if (cmd == "COMMAND") {
     send(fd, "*0\r\n", 4, 0);
   } else {

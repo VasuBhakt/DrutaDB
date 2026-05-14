@@ -1,5 +1,7 @@
 #include "aof.hpp"
 #include "parser_resp.hpp"
+#include "client.hpp"
+#include "pubsub.hpp"
 #include <arpa/inet.h>
 #include <cstdlib>
 #include <cstring>
@@ -85,8 +87,6 @@ int main(int argc, char **argv) {
   server_pfd.events = POLLIN; 
   poll_fds.push_back(server_pfd);
 
-  std::map<int, RespParser> client_parsers;
-
   while (true) {
     // 2. Ask the OS to wait until SOMETHING happens
     // poll (list(pointer to vector), size, timeout_in_ms)
@@ -121,6 +121,7 @@ int main(int argc, char **argv) {
             client_pfd.fd = client_fd;
             client_pfd.events = POLLIN;
             poll_fds.push_back(client_pfd);
+            clients_map[client_fd] = Client{};
           }
         } else {
           // EVENT : An existing client sent a message (PING)
@@ -130,7 +131,8 @@ int main(int argc, char **argv) {
               recv(current_client_fd, buffer, sizeof(buffer), 0);
           if (bytes_recieved <= 0) {
             std::cout << "Client disconnected\n";
-            client_parsers.erase(current_client_fd);
+            pubsub_cleanup_client(current_client_fd);
+            clients_map.erase(current_client_fd);
             close(current_client_fd);
             // poll_fds.erase(poll_fds.begin()+i); O(n) in worst time
             // this is ABSOLUTE GENIUS!
@@ -139,7 +141,7 @@ int main(int argc, char **argv) {
             //current_size--;
             i--;
           } else {
-            client_parsers[current_client_fd].parse_and_execute(
+            clients_map[current_client_fd].parser.parse_and_execute(
                 buffer, bytes_recieved, current_client_fd);
             // send(current_client_fd, response, strlen(response), 0);
             // flush_aof();
