@@ -152,14 +152,17 @@ OK
 
 ## 🧪 Test Scripts
 
-Shell scripts for testing are added in the `test` folder.
-Run them from root of folder by following command:
+Shell scripts and Python Benchmark file for testing are added in the `test` folder.
+Run them from root of project by following command:
 
 ```bash
-chmod +x ./test.sh
+./test/test.sh
+./test/eviction_test.sh
+python3 test/benchmark.py
+
 ```
 
-(for initial test, just `./test.sh` works for later runs)
+(for initial shell script test, run `chmod +x <filename>`)
 
 ---
 
