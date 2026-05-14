@@ -587,13 +587,20 @@ void command_smismember(int fd, std::vector<std::string> &args) {
       return;
     }
     auto &set = std::get<std::set<std::string>>(node->value.data);
-    int present = 0;
+    std::string res;
+    res.reserve(10 * args.size() + 64);
+    res += "*";
+    res += std::to_string(args.size() - 2);
+    res += "\r\n";
+    RespParser parser;
     for (size_t i = 2; i < args.size(); i++) {
       if (set.count(args[i])) {
-        present++;
+        res += ":1\r\n";
+      } else {
+        res += ":0\r\n";
       }
     }
-    send_integer(fd, present); 
+    send(fd, res.c_str(), res.size(), 0);
   } else {
     send_integer(fd, 0);
   }
@@ -723,7 +730,9 @@ void command_sinter(int fd, std::vector<std::string> &args) {
     }
     DrutaNode *node_other = it_other->second.get();
     if (node_other->value.type != ValueType::SET) {
-      continue;
+      std::string err = "-WRONGTYPE Operation against a key holding the wrong kind of value\r\n";
+      send(fd, err.c_str(), err.size(), 0);
+      return;
     }
     auto &set_other = std::get<std::set<std::string>>(node_other->value.data);
     

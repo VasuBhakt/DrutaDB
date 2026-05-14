@@ -25,6 +25,7 @@ DrutaDB supports the following data structures as values :
 - **STRINGS** : String values implemented using `std::string`. Operations supported :
    * **SET** `<key> <val>` **EX** `<ttl in seconds>` (Used for setting a string value, supports `EX` for seconds ttl, `PX` for milliseconds).
    * **GET** `<key>`
+
 - **LIST** : Values stored in list format, imitating Redis lists. Operations supported :
    * **RPUSH** `<list_name> <element_1> <element_2> ...` (Push into list from the right or back side, initialize list if does not exist).
    * **LPUSH** `<list_name> <element_1> <element_2> ...` (Push into list from the left or front side, initialize list if does not exist).
@@ -32,9 +33,32 @@ DrutaDB supports the following data structures as values :
    * **RPOP** `<list_name> [count]` (Remove and return elements from back).
    * **LRANGE** `<list_name> <start_index> <end_index>` (Get elements within range from list).
    * **LLEN** `<list_name>` (Get list length)
-- **HASH** : Stores data in object-like format, imitating Redis Hashes. Implemented using a dual data-structure policy, wherein it is initialized as a `std::vector<std::pair<std::string, std::string>>` and is maintained as a vector until it has more than `DRUTA_MAX_KEY` (usually 64) keys, upon which it is converted into a map structure internally using `std::map<std::string,std::string>`. This was done in order to limit the memory footprint of smaller hashes, inspired by **Redis' Listpack Implementation**. 
-                
 
+- **HASH** : Stores data in object-like format, imitating Redis Hashes. Implemented using a dual data-structure policy, wherein it is initialized as a `std::vector<std::pair<std::string, std::string>>` and is maintained as a vector until it has more than `DRUTA_MAX_KEY` (usually 64) keys, upon which it is converted into a map structure internally using `std::map<std::string,std::string>`. This was done in order to limit the memory footprint of smaller hashes, inspired by **Redis' Listpack Implementation**. 
+   * **HSET** `<hash_name> <field_1> <value_1> <field_2> <value_2> ...` (Set elements in hash; create hash if not present. The values are stored as `field_1: value_1 field_2:value_2` under `hash_name` key).
+   * **HGET** `<hash_name> <key>` (Get value).
+   * **HGETALL** `<hash_name>` (Get all key-value pairs under `hash_name` in the format `<key1> <value1> <key2> <value2>`).
+   * **HDEL** `<hash_name> <key_1> <key_2> ...` (deletes keys from hash).
+   * **HLEN** `<hash_size>` (number of keys in hash).
+
+- **SET** : Stores unique data in set format, imitating Redis Sets.
+   * **SADD** `<set_name> <val_1> <val_2>` (Create or add to a set).
+   * **SCARD** `<set_name>` (Returns cardinality of set).
+   * **SISMEMBER** `<set_name> <key>` (Checks whether element are part of the set).
+   * **SMEMBERS** `<set_name>` (Returns all elements in set).
+   * **SMISMEMBER** `<set_name> <key1> <key2> ...`(Checks whether elements are part of the set).
+   * **SINTER** `<set1> <set2> <set3>...` (Returns intersection of given sets).
+   * **SUNION**  `<set1> <set2> <set3>...` (Returns union of given sets).
+   * **SDIFF** `<set1> <set2> <set3>...` (Returns difference of first set with other sets).
+   * **SDEL** `<val1> <val2> ...` (Deletes values from set).
+
+Other commands which are supported:
+   * **PING** - Returns `PONG`.
+   * **ECHO** `<message>` - Returns `<message>`
+   * **DEL** `<key_1> <key_2> ...` - Deletes keys from store.
+   * **FLUSHDB** `--sure` - Removes all keys from store. Use `--sure` flag for safer flushing.
+
+                
 
 ## 💾 Persistence (AOF)
 
