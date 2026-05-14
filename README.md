@@ -8,7 +8,7 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **Custom RESP Parser:** Implements a state-machine-based parser for the **Redis Serialization Protocol (RESP)**. The parser safely processes incoming network byte streams, handling TCP packet fragmentation and partial reads natively.
 
-- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`) wrapped in a custom `DrutaValue` struct to support polymorphic data types.
+- **Data Structures:** The underlying datastore relies on standard C++ containers (`std::map`, `std::deque`, `std::string`, `std::set`) wrapped in a custom `DrutaValue` struct to support polymorphic data types.
 
 - **O(1) LRU Eviction:** Implements a **Hash Map + Doubly Linked List** hybrid to track key recency. This architecture ensures that cache hits, updates, and evictions all occur in constant time, maintaining deterministic performance under high memory pressure.
 
@@ -20,22 +20,21 @@ An event-driven, single-threaded, in-memory key-value data store written in C++2
 
 - **Smart AOF Rewriting:** Features a growth-based trigger mechanism to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
 
-## 🛠️ Supported Commands
+## 🧩 Supported Data Structures and Commands
+DrutaDB supports the following data structures as values :
+- **STRINGS** : String values implemented using `std::string`. Operations supported :
+   * **SET** `<key> <val>` **EX** `<ttl in seconds>` (Used for setting a string value, supports `EX` for seconds ttl, `PX` for milliseconds).
+   * **GET** `<key>`
+- **LIST** : Values stored in list format, imitating Redis lists. Operations supported :
+   * **RPUSH** `<list_name> <element_1> <element_2> ...` (Push into list from the right or back side, initialize list if does not exist).
+   * **LPUSH** `<list_name> <element_1> <element_2> ...` (Push into list from the left or front side, initialize list if does not exist).
+   * **LPOP** `<list_name> [count]` (Remove and return elements from front).
+   * **RPOP** `<list_name> [count]` (Remove and return elements from back).
+   * **LRANGE** `<list_name> <start_index> <end_index>` (Get elements within range from list).
+   * **LLEN** `<list_name>` (Get list length)
+- **HASH** : Stores data in object-like format, imitating Redis Hashes. Implemented using a dual data-structure policy, wherein it is initialized as a `std::vector<std::pair<std::string, std::string>>` and is maintained as a vector until it has more than `DRUTA_MAX_KEY` (usually 64) keys, upon which it is converted into a map structure internally using `std::map<std::string,std::string>`. This was done in order to limit the memory footprint of smaller hashes, inspired by **Redis' Listpack Implementation**. 
+                
 
-DrutaDB currently supports a subset of standard commands over TCP port `6379`:
-
-- `PING`
-- `ECHO <message>`
-- `SET <key> <val> EX <ttl in seconds>` (Supports `EX` for seconds and `PX` for milliseconds TTL)
-- `GET <key>`
-- `RPUSH <list_name> <element1> <element2> ...` (List data structure)
-- `LRANGE <list_name> <start_index> <end_index>` (Get elements within range from list)
-- `LPUSH <list_name> <element1> <element2> ...` (Prepend elements to list)
-- `LPOP <list_name> [count]` (Remove and return elements from head)
-- `RPOP <list_name> [count]` (Remove and return elements from tail)
-- `DEL <key1> <key2> ...` (Delete one or more keys)
-- `LLEN <list_name>` (Get list length)
-- `FLUSHDB --sure` (remove all keys from store, --sure flag is necessary to prevent accidental deletions)
 
 ## 💾 Persistence (AOF)
 
