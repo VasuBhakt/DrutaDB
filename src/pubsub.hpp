@@ -6,7 +6,7 @@
 #include <set>
 #include <vector>
 
-static constexpr int MAX_SUBSCRIPTIONS_PER_CLIENT = 512;
+static constexpr int MAX_SUBSCRIPTIONS_PER_CLIENT = 128;
 
 extern std::map<std::string, std::set<int>> channels_subscribers;
 
