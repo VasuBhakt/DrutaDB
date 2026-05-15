@@ -3,6 +3,9 @@
 
 #include <string>
 #include <set>
+#include <map>
+#include "parser_resp.hpp"
+
 
 struct Client{
     RespParser parser;

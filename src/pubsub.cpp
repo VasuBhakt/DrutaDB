@@ -13,6 +13,12 @@ void pubsub_subscribe(int fd, std::vector<std::string> &args) {
     RespParser parser;
     for(size_t i = 1; i < args.size(); i++) {
         const std::string& channel = args[i];
+        bool already_subbed = clients_map[fd].subscribed_channels.contains(channel); 
+        if (!already_subbed && clients_map[fd].subscribed_channels.size() >= MAX_SUBSCRIPTIONS_PER_CLIENT) {
+            std::string err = "-ERR maximum number of subscriptions reached\r\n";
+            send(fd, err.c_str(), err.size(), 0);
+            break;
+        }
         channels_subscribers[channel].insert(fd);
         clients_map[fd].is_subscriber = true;
         clients_map[fd].subscribed_channels.insert(channel);

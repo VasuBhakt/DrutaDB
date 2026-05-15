@@ -4,6 +4,7 @@
 #include "lru.hpp"
 #include "parser_resp.hpp"
 #include "store.hpp"
+#include "client.hpp"
 #include "pubsub.hpp"
 #include <iostream>
 #include <iomanip>
@@ -942,7 +943,7 @@ void handle_command(int fd, std::vector<std::string> &args) {
     success = command_flushdb(fd, args);
   } else if (cmd == "SUBSCRIBE" && args.size() >= 2) {
     command_subscribe(fd, args);
-  } else if (cmd == "UNSUBSCRIBE" && args.size() >= 2) {
+  } else if (cmd == "UNSUBSCRIBE" && args.size() >= 1) {
     command_unsubscribe(fd, args);
   } else if (cmd == "PUBLISH" && args.size() == 3) {
     command_publish(fd, args);
