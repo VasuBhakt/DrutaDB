@@ -20,7 +20,7 @@ An event-driven, single-threaded, in-memory key-value data store and real-time P
 
 - **Smart AOF Rewriting:** Features a growth-based trigger mechanism to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
 
-- **Single-Allocation Message Broadcasting:** Implements a Pub/Sub engine where messages are serialized into RESP exactly once ($O(1)$ construction) and broadcasted to all subscribers in $O(N)$, avoiding the $O(N \times M)$ cost of per-subscriber serialization.
+- **Single-Allocation Message Broadcasting:** Implements a Pub/Sub engine where messages are serialized into RESP exactly once ($O(1)$ construction) and broadcasted to all subscribers in $O(N)$.
 
 - **Resource Safety & Cleanup:** Protects against resource exhaustion with a configurable subscription limit per client. Includes an automated cleanup policy that purges subscriber state upon connection teardown to prevent "ghost" subscriptions.
 
