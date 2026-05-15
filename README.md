@@ -93,7 +93,7 @@ DrutaDB implements a memory-aware eviction policy designed for deterministic per
 
 DrutaDB features a high-performance messaging engine designed for real-time data broadcasting with a focus on resource safety and efficiency:
 
-- **Single-Allocation Broadcast**: The engine serializes messages into RESP format exactly **once** per publish operation, achieving $O(1)$ message construction. It then iterates through the subscriber set and writes the pre-built buffer directly to each socket in $O(N)$ time, where N is the number of subscribers. This eliminates the $O(N \times M)$ cost of naive implementations that rebuild the message string per subscriber.
+- **Single-Allocation Broadcast**: The engine serializes messages into RESP format exactly **once** per publish operation, achieving $O(1)$ message construction. It then iterates through the subscriber set and writes the pre-built buffer directly to each socket in $O(N)$ time, where N is the number of subscribers.
 - **Resource Protection (Limits)**: Implements a `MAX_SUBSCRIPTIONS_PER_CLIENT` limit (Default: 128) to protect the server from heap-spraying attacks or runaway client scripts.
 - **Zero-Ghost Subscriber Policy**: A dedicated cleanup handler is triggered on socket teardown. It performs a reverse lookup in the client's subscription set to purge all channel entries, ensuring that disconnected clients never leak memory or contaminate the broadcast loop.
 - **Idempotent State Management**: Subscription logic verifies state before incrementing counters, ensuring that repeated `SUBSCRIBE` commands for the same channel are handled gracefully without inflating memory usage.
