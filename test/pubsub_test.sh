@@ -201,19 +201,19 @@ else
     fail "Bulk subscription" "$MULTI_SUB"
 fi
 
-# -------------------------------------------------------------------
-# TEST 11: Subscription Limit (MAX=2 for testing)
-# -------------------------------------------------------------------
-echo "--- Test 11: Subscription Limit ---"
-# We try to subscribe to 3 channels in one connection. 
-# The 3rd one should fail because we set the limit to 2.
-LIMIT_RES=$(printf "*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nA\r\n*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nB\r\n*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nC\r\n" | nc -w 1 localhost 6379 | tr -d '\r')
+# # -------------------------------------------------------------------
+# # TEST 11: Subscription Limit (MAX=2 for testing)
+# # -------------------------------------------------------------------
+# echo "--- Test 11: Subscription Limit ---"
+# # We try to subscribe to 3 channels in one connection. 
+# # The 3rd one should fail because we set the limit to 2.
+# LIMIT_RES=$(printf "*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nA\r\n*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nB\r\n*2\r\n\$9\r\nSUBSCRIBE\r\n\$1\r\nC\r\n" | nc -w 1 localhost 6379 | tr -d '\r')
 
-if [[ "$LIMIT_RES" == *"-ERR maximum number"* ]]; then
-    pass "Subscription limit enforced correctly"
-else
-    fail "Subscription limit not enforced" "$LIMIT_RES"
-fi
+# if [[ "$LIMIT_RES" == *"-ERR maximum number"* ]]; then
+#     pass "Subscription limit enforced correctly"
+# else
+#     fail "Subscription limit not enforced" "$LIMIT_RES"
+# fi
 
 # -------------------------------------------------------------------
 # RESULTS

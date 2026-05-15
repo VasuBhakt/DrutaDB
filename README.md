@@ -20,7 +20,7 @@ An event-driven, single-threaded, in-memory key-value data store and real-time m
 
 - **Smart AOF Rewriting:** Features a growth-based trigger mechanism to prevent unbounded log growth. It compresses the current memory state into a minimal sequence of commands using an atomic file-swap strategy to ensure zero data corruption.
 
-- **O(1) Message Broadcasting:** Implements a Pub/Sub engine with $O(1)$ fan-out. Messages are serialized into RESP exactly once and broadcasted directly to all subscribers' socket descriptors, minimizing redundant memory allocations and CPU cycles during high-traffic events.
+- **Single-Allocation Message Broadcasting:** Implements a Pub/Sub engine where messages are serialized into RESP exactly once ($O(1)$ construction) and broadcasted to all subscribers in $O(N)$, avoiding the $O(N \times M)$ cost of per-subscriber serialization.
 
 - **Resource Safety & Cleanup:** Protects against resource exhaustion with a configurable subscription limit per client. Includes an automated cleanup policy that purges subscriber state upon connection teardown to prevent "ghost" subscriptions.
 
@@ -93,7 +93,7 @@ DrutaDB implements a memory-aware eviction policy designed for deterministic per
 
 DrutaDB features a high-performance messaging engine designed for real-time data broadcasting with a focus on resource safety and efficiency:
 
-- **$O(1)$ Broadcasting Logic**: The engine serializes messages into RESP format exactly **once** per publish operation. It then iterates through the subscriber list and writes the pre-built buffer directly to each socket, eliminating redundant CPU cycles and memory allocations during high-fanout events.
+- **Single-Allocation Broadcast**: The engine serializes messages into RESP format exactly **once** per publish operation, achieving $O(1)$ message construction. It then iterates through the subscriber set and writes the pre-built buffer directly to each socket in $O(N)$ time, where N is the number of subscribers. This eliminates the $O(N \times M)$ cost of naive implementations that rebuild the message string per subscriber.
 - **Resource Protection (Limits)**: Implements a `MAX_SUBSCRIPTIONS_PER_CLIENT` limit (Default: 128) to protect the server from heap-spraying attacks or runaway client scripts.
 - **Zero-Ghost Subscriber Policy**: A dedicated cleanup handler is triggered on socket teardown. It performs a reverse lookup in the client's subscription set to purge all channel entries, ensuring that disconnected clients never leak memory or contaminate the broadcast loop.
 - **Idempotent State Management**: Subscription logic verifies state before incrementing counters, ensuring that repeated `SUBSCRIBE` commands for the same channel are handled gracefully without inflating memory usage.
