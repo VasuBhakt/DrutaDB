@@ -4,7 +4,7 @@ An event-driven, single-threaded, in-memory key-value data store and real-time P
 
 ## 🏗️ Architecture & Technical Details
 
-- **Event-Driven Concurrency:** Utilizes the POSIX `poll()` API for I/O multiplexing. This allows the server to handle multiple concurrent TCP client connections efficiently on a single thread without the context-switching overhead of a thread-per-connection model.
+- **Event-Driven Concurrency:** Utilizes Linux's high-performance `epoll` API for I/O multiplexing. This allows the server to scale to thousands of concurrent TCP client connections efficiently on a single thread without the context-switching overhead of a thread-per-connection model.
 
 - **Custom RESP Parser:** Implements a state-machine-based parser for the **Redis Serialization Protocol (RESP)**. The parser safely processes incoming network byte streams, handling TCP packet fragmentation and partial reads natively.
 
@@ -100,34 +100,52 @@ DrutaDB features a high-performance messaging engine designed for real-time data
 
 ## 🏎️ Performance & Benchmarking
 
-DrutaDB is optimized for high-throughput, low-latency workloads. Below are representative results from the internal benchmarking suite (`test/benchmark.py`):
+DrutaDB is optimized for extreme high-throughput, low-latency workloads. Below are the results from our `test/benchmark_pro.sh` suite using the industry-standard `redis-benchmark` tool.
 
-| Metric                                | Result             |
-| :------------------------------------ | :----------------- |
-| **Single-client Sequential SET**      | **~21,000 req/s**  |
-| **Pipelined SET (x50 batch)**         | **~102,000 req/s** |
-| **Concurrent Clients (50 clients)**   | **~30,500 req/s**  |
-| **Mixed Keyspace (70/30 Read/Write)** | **~20,800 req/s**  |
-| **List Operations (RPUSH/LPOP)**      | **~20,000 req/s**  |
-| **Hash Operations (HSET/HGET)**       | **~19,000 req/s**  |
+### Native Linux Performance
+*Tested natively on Ubuntu using the C++ `epoll` engine.*
+
+| Workload | Throughput (req/s) | p50 Latency | p99 Latency |
+| :--- | :--- | :--- | :--- |
+| **Sequential (1 client, No Pipeline)** | **~26,000** | 0.039 ms | 0.119 ms |
+| **High Concurrency (1k clients)** | **~120,000** | 4.08 ms | 7.25 ms |
+| **Production Pipelined (100 pipe)** | **~290,000** | 35.0 ms | 51.0 ms |
+| **Extreme Stress (1k clients, 99 pipe)** | **~330,000** | 312.0 ms | 382.0 ms |
+
+### Docker Container Performance
+*Tested via `docker compose` (Docker proxy introduces slight per-packet network overhead, but pipelined throughput remains massive).*
+
+| Workload | Throughput (req/s) | p50 Latency | p99 Latency |
+| :--- | :--- | :--- | :--- |
+| **Sequential (1 client, No Pipeline)** | **~7,500** | 0.11 ms | 0.38 ms |
+| **High Concurrency (1k clients)** | **~55,000** | 9.0 ms | 14.5 ms |
+| **Production Pipelined (100 pipe)** | **~225,000** | 42.0 ms | 85.0 ms |
+| **Extreme Stress (1k clients, 99 pipe)** | **~250,000** | 380.0 ms | 430.0 ms |
 
 ### Key Optimizations:
 
-- **`everysec` AOF Policy:** Implements a time-buffered disk flush (every 1 second), maintaining a p99 tail latency of 0.31ms and sustained 10k+ req/s under concurrent load.
-- **TCP_NODELAY:** Disables Nagle's algorithm to eliminate the delayed-ACK penalty, enabling **4.8x higher throughput** for pipelined operations, compared to sequential baseline.
+- **`epoll` Engine:** Replaced `poll()` with `epoll` to bypass the $O(N)$ scanning bottleneck, achieving near $O(1)$ event loops and pushing pipelined throughput to over 300,000 req/s.
+- **`everysec` AOF Policy:** Implements a time-buffered disk flush (every 1 second), maintaining low p99 tail latencies under concurrent load.
+- **TCP_NODELAY:** Disables Nagle's algorithm to eliminate the delayed-ACK penalty, enabling drastically higher throughput for pipelined operations.
 
 > [!NOTE]
 > **Benchmark Environment:** Tests conducted on an **12th Gen Intel(R) Core(TM) i5-1235U** with peak throughput measured during Turbo Boost. Results may vary based on CPU thermal limits and background process interference.
 
 ## 🌍 Supported Environments
 
-Due to its reliance on standard POSIX APIs (`poll`, `socket`, `arpa/inet.h`), DrutaDB is highly portable and natively supported in the following environments:
+DrutaDB leverages the highly-performant Linux `epoll` API. However, it is fully containerized to run seamlessly on any OS:
 
-- **Linux**
-- **macOS / FreeBSD**
-- **Windows Subsystem for Linux (WSL)**
+- **Linux** (Native `epoll` support)
+- **macOS / Windows** (via Docker Compose)
 
-_(Note: While `poll()` provides excellent portability across Unix-like systems, scaling to extreme concurrent loads (e.g., C10K) would require swapping the multiplexer to OS-specific APIs like Linux's `epoll` or macOS's `kqueue`.)_
+## 🐳 Running with Docker
+
+DrutaDB is fully Dockerized using a lightweight multi-stage build. This allows anyone to run the database instantly without compiling C++ code or installing dependencies.
+
+```bash
+docker compose up -d --build
+```
+*Note: The `docker-compose.yml` is securely configured to strictly bind port 6379 to your host's `127.0.0.1`, ensuring your database is protected from external network access.*
 
 ## 🚀 Build & Run
 
