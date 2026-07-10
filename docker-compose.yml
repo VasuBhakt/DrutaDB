@@ -1,0 +1,13 @@
+services:
+  drutadb:
+    build: .
+    container_name: drutadb
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536

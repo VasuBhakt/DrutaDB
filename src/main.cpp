@@ -59,8 +59,9 @@ int main(int argc, char **argv) {
   // and Port).
   struct sockaddr_in server_addr = {0}; // Initialize everything (including padding) to zero
   server_addr.sin_family = AF_INET; // IPv4
-  server_addr.sin_addr.s_addr =
-      inet_addr("127.0.0.1");         // Listen on localhost only
+  const char* bind_ip_env = std::getenv("DRUTA_BIND_IP");
+  const char* bind_ip = bind_ip_env ? bind_ip_env : "127.0.0.1";
+  server_addr.sin_addr.s_addr = inet_addr(bind_ip);
   server_addr.sin_port = htons(6379); // Druta port (6379). htons() ensures "Big
                                       // Endian" byte order for the network.
 
