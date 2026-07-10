@@ -160,7 +160,7 @@ For local Linux build, follow the steps:
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
 ./drutadb
 ```
