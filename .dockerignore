@@ -1,0 +1,8 @@
+build/
+cmake-build-debug/
+.git/
+data/
+test/
+*.aof
+*.tmp
+.DS_Store
