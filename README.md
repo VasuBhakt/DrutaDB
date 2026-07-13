@@ -213,7 +213,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE.txt) 
 
 ## 🤝 Contributing
 
-Contributions are welcome! Open issues or submit pull requests to improve the project! <br>
+**Maintainer** : Swastik Bose (VasuBhakt)
+
+Contributions are welcome! Please go through [CONTRIBUTION GUIDELINES](CONTRIBUTING.md) for contributing to this project! <br>
 
 ---
 
